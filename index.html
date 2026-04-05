@@ -325,10 +325,29 @@ function updateRadarItems(){
     el.className='radar-item';
     el.style.left=`${xPos}%`; el.style.top=`${yPos}%`;
     const opacity=sessionFoundIds.has(item.id)?'opacity-30':'opacity-100';
-    el.innerHTML=`<div class="item-dot ${opacity}"></div>`;
+   el.innerHTML=`<div class="item-dot ${opacity}"></div>`;
     container.appendChild(el);
-  });
-  document.getElementById('objCount').innerText=String(items.length).padStart(2,'0');
+  }); // <-- 這是原本項目的迴圈結束
+
+  // --- 這裡是你新增的進度顯示邏輯 (約 228 行) ---
+  const totalCount = items.length;
+  const foundCount = items.filter(it => sessionFoundIds.has(it.id)).length;
+  const displayFound = String(foundCount).padStart(2, '0');
+  const displayTotal = String(totalCount).padStart(2, '0');
+  document.getElementById('objCount').innerText = displayFound + '/' + displayTotal;
+}
+
+  // --- 這裡開始修改 ---
+  const totalCount = items.length;
+  // 過濾出那些 ID 已經存在於 sessionFoundIds (已踩過) 的項目
+  const foundCount = items.filter(it => sessionFoundIds.has(it.id)).length;
+
+  // 格式化顯示為 01/05 (padStart 確保兩位數)
+  const displayFound = String(foundCount).padStart(2, '0');
+  const displayTotal = String(totalCount).padStart(2, '0');
+  
+  document.getElementById('objCount').innerText = displayFound + '/' + displayTotal;
+  // --- 這裡結束修改 ---
 }
 function changeZoom(z){
   zoom=z;
@@ -340,15 +359,35 @@ function changeZoom(z){
 /* ====================== 領袖介面 ====================== */
 function openLeaderAuth(){ document.getElementById('leaderPanel').classList.remove('hidden'); }
 function closeLeader(){ document.getElementById('leaderPanel').classList.add('hidden'); }
-function verifyLeader(){
-  const pass=document.getElementById('leaderPass').value;
-  if(pass==='0728'){
+function verifyLeader() {
+  const pass = document.getElementById('leaderPass').value;
+
+  // 只要密碼是 0728 或 1201 都能登入
+  if (pass === '0728' || pass === '1201') {
+    
+    // 隱藏登入框，顯示控制面板
     document.getElementById('authBox').classList.add('hidden');
     document.getElementById('dropBox').classList.remove('hidden');
-    isRoot = pass.endsWith('ROOT');
-    document.getElementById('rootSection').classList.toggle('hidden',!isRoot);
-    // rootBadge 已移除（原本不存在）
-  }else alert('密碼錯誤');
+
+    // 判斷是否為超級管理員 (ROOT)
+    // 只有輸入 1201 的人才會被判定為 isRoot = true
+    isRoot = (pass === '1201');
+
+    // 控制「超級管理員工具」區域的顯示
+    const rootSec = document.getElementById('rootSection');
+    if (rootSec) {
+      if (isRoot) {
+        rootSec.classList.remove('hidden'); // 1201 進來就顯示
+      } else {
+        rootSec.classList.add('hidden');    // 0728 進來就隱藏
+      }
+    }
+
+    initAdminUI();
+    renderDroppedList();
+  } else {
+    alert('密碼錯誤');
+  }
 }
 function switchMode(m){
   dropType=m;
