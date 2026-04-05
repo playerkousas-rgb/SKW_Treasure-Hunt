@@ -2,227 +2,476 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SKW Cloud Radar - 雲端雷達系統</title>
-    <!-- 載入必要腳本 -->
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SKW Dragon Radar - Smart Media v5.1 (Pro)</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/lucide-react/0.263.0/lucide.min.css" rel="stylesheet">
-
     <style>
-        @keyframes radar-spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
+        :root {
+            --radar-bg: #0a2b16;
+            --radar-grid: #1e6b3a;
+            --radar-glow: #39ff14;
+            --user-blue: #0088ff; /* 使用者藍點 */
         }
-        .radar-line {
-            animation: radar-spin 4s linear infinite;
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: #000; overflow: hidden;
+            font-family: 'Noto Sans TC', sans-serif;
+            color: var(--radar-glow);
+            overscroll-behavior-y: contain; /* 防止下拉重新整理 */
         }
-        body { 
-            background-color: #020617; 
-            color: #f8fafc; 
-            margin: 0; 
-            overflow: hidden; 
-            font-family: system-ui, -apple-system, sans-serif;
+
+        /* 雷達容器 */
+        .radar-container {
+            width: 100vw; height: 100vh;
+            background-color: var(--radar-bg);
+            background-image: 
+                linear-gradient(var(--radar-grid) 1px, transparent 1px),
+                linear-gradient(90deg, var(--radar-grid) 1px, transparent 1px);
+            position: relative; overflow: hidden;
+            background-size: 50px 50px; /* 固定格線大小，增加距離感 */
         }
-        .scanner-glow {
-            background: radial-gradient(circle, rgba(34, 197, 94, 0.15) 0%, rgba(0, 0, 0, 0) 70%);
+
+        /* 掃描線 */
+        .scanning-line {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(to bottom, transparent, rgba(57, 255, 20, 0.05));
+            border-bottom: 1px solid var(--radar-glow);
+            animation: scan-move 4s infinite linear;
+            pointer-events: none; z-index: 10;
         }
+
+        @keyframes scan-move {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100%); }
+        }
+
+        /* 藏寶點 (紅點) */
+        .radar-item {
+            position: absolute; transform: translate(-50%, -50%);
+            animation: blink 0.8s infinite alternate; z-index: 20;
+        }
+        .item-dot { 
+            width: 16px; height: 16px; 
+            background: #ff3e3e; border-radius: 50%; 
+            box-shadow: 0 0 15px #ff0000; border: 2px solid white; 
+        }
+        
+        @keyframes blink {
+            from { opacity: 0.5; transform: translate(-50%, -50%) scale(0.9); }
+            to { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+        }
+
+        /* 使用者位置 (藍點) */
+        .user-pos-marker {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 30; pointer-events: none;
+        }
+        .user-dot {
+            width: 14px; height: 14px;
+            background: var(--user-blue);
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 15px var(--user-blue);
+        }
+        .user-ping {
+            position: absolute; inset: -4px;
+            border: 2px solid var(--user-blue);
+            border-radius: 50%;
+            animation: user-ping-anim 1.5s infinite;
+            opacity: 0;
+        }
+        @keyframes user-ping-anim {
+            0% { transform: scale(0.5); opacity: 1; }
+            100% { transform: scale(2.5); opacity: 0; }
+        }
+
+        /* UI 通用樣式 */
+        .ui-overlay { position: absolute; inset: 0; z-index: 50; pointer-events: none; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; }
+        .ui-element { pointer-events: auto; }
+        .radar-btn { background: rgba(0,30,0,0.85); border: 1px solid var(--radar-glow); color: var(--radar-glow); padding: 8px 12px; font-size: 12px; border-radius: 6px; transition: all 0.2s; font-weight: bold; }
+        .radar-btn:active { transform: scale(0.95); background: var(--radar-glow); color: black; }
+        .radar-btn:disabled { opacity: 0.3; pointer-events: none; }
+
+        /* 彈窗樣式 */
+        .modal { position: fixed; inset: 0; z-index: 1000; background: rgba(0,10,5,0.98); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 25px; text-align: center; }
+        .pattern-content { font-size: 80px; margin: 20px 0; filter: drop-shadow(0 0 10px var(--radar-glow)); max-width: 100%; }
+        .text-content { font-size: 28px; font-weight: 900; color: white; line-height: 1.4; font-family: sans-serif; }
+        
+        /* 管理面板樣式 */
+        .admin-card { background: #111; border: 1px solid #333; padding: 12px; border-radius: 10px; }
+        .tab-btn { flex: 1; padding: 10px; font-size: 12px; border-bottom: 2px solid transparent; opacity: 0.5; color: white;}
+        .tab-active { border-bottom-color: var(--radar-glow); color: var(--radar-glow); opacity: 1; font-weight: bold;}
+        
+        /* 工具類 */
+        .hidden { display: none !important; }
+        input[type="text"], input[type="password"], textarea { font-family: monospace; }
+        #previewContainer img { max-width: 100%; max-height: 120px; object-fit: contain; border-radius: 4px; }
     </style>
 </head>
 <body>
-    <div id="root"></div>
 
-    <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+    <div id="bootScreen" class="fixed inset-0 bg-black z-[100] flex flex-col items-center justify-center p-10">
+        <div class="w-32 h-32 border-4 border-green-900 rounded-full flex items-center justify-center mb-8 relative">
+            <div class="absolute inset-0 border-t-4 border-green-400 rounded-full animate-spin"></div>
+            <span class="text-5xl">🛰️</span>
+        </div>
+        <h1 class="text-2xl font-black mb-2 tracking-[0.2em] text-green-500 italic">SKW RADAR SYSTEM</h1>
+        <p class="text-[10px] text-green-800 mb-12 font-mono">MISSION MEDIA CENTER V5.1 Pro</p>
+        <input type="text" id="missionIdInput" placeholder="輸入任務頻道 ID (例: SKW1)" 
+            class="bg-transparent border-b-2 border-green-900 text-center text-2xl outline-none w-full max-w-xs mb-8 uppercase text-white pb-2 focus:border-green-400 placeholder:text-green-950 font-black">
+        <button onclick="startMission()" class="radar-btn w-full max-w-xs py-4 text-lg font-bold shadow-lg shadow-green-900/50">同步衛星數據</button>
+    </div>
 
-        // Firebase 模擬與配置 (請替換為你的實際配置)
-        // 這裡預留了 Firebase 的載入邏輯，但為了確保能直接開啟，先實作核心 UI 與 GPS 功能
-        
-        const App = () => {
-            const [isStarted, setIsStarted] = useState(false);
-            const [missionId, setMissionId] = useState('');
-            const [userPos, setUserPos] = useState(null);
-            const [zoom, setZoom] = useState(5);
-            const [stations, setStations] = useState([]);
-            const [error, setError] = useState(null);
+    <div id="radarMain" class="hidden">
+        <div class="radar-container" id="gridContainer">
+            <div class="absolute top-1/2 left-0 w-full h-[1px] bg-green-500/20 z-0"></div>
+            <div class="absolute left-1/2 top-0 w-[1px] h-full bg-green-500/20 z-0"></div>
+            
+            <div class="scanning-line"></div>
+            
+            <div id="itemsContainer"></div>
+            
+            <div class="user-pos-marker" id="userMarker">
+                <div class="user-ping"></div>
+                <div class="user-dot"></div>
+            </div>
+        </div>
 
-            // 啟動 GPS 監控
-            useEffect(() => {
-                if (!isStarted) return;
-
-                if (!navigator.geolocation) {
-                    setError("您的瀏覽器不支持 GPS 定位");
-                    return;
-                }
-
-                const watchId = navigator.geolocation.watchPosition(
-                    (p) => {
-                        setUserPos({ lat: p.coords.latitude, lng: p.coords.longitude });
-                        console.log("位置更新:", p.coords.latitude, p.coords.longitude);
-                    },
-                    (err) => {
-                        setError("無法取得定位權限，請檢查瀏覽器設定。");
-                        console.error(err);
-                    },
-                    { enableHighAccuracy: true }
-                );
-
-                return () => navigator.geolocation.clearWatch(watchId);
-            }, [isStarted]);
-
-            // 計算兩點距離 (Haversine formula)
-            const calculateDistance = (lat1, lon1, lat2, lon2) => {
-                const R = 6371e3; // 公尺
-                const φ1 = lat1 * Math.PI/180;
-                const φ2 = lat2 * Math.PI/180;
-                const Δφ = (lat2-lat1) * Math.PI/180;
-                const Δλ = (lon2-lon1) * Math.PI/180;
-                const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                          Math.cos(φ1) * Math.cos(φ2) *
-                          Math.sin(Δλ/2) * Math.sin(Δλ/2);
-                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-                return R * c;
-            };
-
-            const handleStart = () => {
-                if (missionId.trim()) {
-                    setIsStarted(true);
-                }
-            };
-
-            if (!isStarted) {
-                return (
-                    <div className="flex flex-col items-center justify-center min-h-screen p-6 bg-slate-950">
-                        <div className="w-full max-w-md space-y-8 text-center">
-                            <h1 className="text-4xl font-black tracking-tighter text-green-500 italic">SKW CLOUD RADAR</h1>
-                            <p className="text-slate-400 text-sm">請輸入任務編號以啟動衛星掃描系統</p>
-                            
-                            <div className="space-y-4">
-                                <input 
-                                    type="text" 
-                                    value={missionId}
-                                    onChange={(e) => setMissionId(e.target.value.toUpperCase())}
-                                    placeholder="MISSION ID"
-                                    className="w-full bg-transparent border-b-2 border-green-900 text-center text-2xl py-2 outline-none focus:border-green-400 transition-colors text-white uppercase tracking-widest"
-                                />
-                                <button 
-                                    onClick={handleStart}
-                                    className="w-full bg-green-600 hover:bg-green-500 text-black font-bold py-4 rounded-lg transition-all active:scale-95 shadow-[0_0_20px_rgba(34,197,94,0.3)]"
-                                >
-                                    INITIALIZE RADAR
-                                </button>
-                            </div>
-                            
-                            {error && <p className="text-red-500 text-sm mt-4 bg-red-500/10 p-2 rounded">{error}</p>}
-                        </div>
+        <div class="ui-overlay">
+            <div class="flex justify-between items-start">
+                <div class="bg-black/80 p-2 border border-green-900 rounded flex gap-3 items-center ui-element">
+                    <div>
+                        <div class="text-[9px] opacity-40 uppercase tracking-widest">Channel</div>
+                        <div id="currentMissionId" class="text-xl font-black text-green-400 leading-none">---</div>
                     </div>
-                );
-            }
-
-            return (
-                <div className="relative h-screen w-screen overflow-hidden bg-black select-none">
-                    {/* 背景網格 */}
-                    <div className="absolute inset-0 scanner-glow" />
-                    <div 
-                        className="absolute inset-0 opacity-20"
-                        style={{
-                            backgroundImage: `linear-gradient(#166534 1px, transparent 1px), linear-gradient(90deg, #166534 1px, transparent 1px)`,
-                            backgroundSize: '40px 40px'
-                        }}
-                    />
-
-                    {/* 雷達掃描線 */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="relative w-[150vmax] h-[150vmax] radar-line">
-                            <div className="absolute top-1/2 left-1/2 w-1/2 h-[2px] bg-gradient-to-r from-green-500/0 to-green-500 origin-left" />
-                        </div>
-                    </div>
-
-                    {/* 目標渲染層 */}
-                    <div className="absolute inset-0 flex items-center justify-center">
-                        {userPos && stations.map((s, idx) => {
-                            const range = 500 / zoom; // 根據縮放調整範圍
-                            const dLat = s.lat - userPos.lat;
-                            const dLng = s.lng - userPos.lng;
-                            
-                            // 簡易投影計算
-                            const x = 50 + (dLng * 111320 / range) * 50;
-                            const y = 50 - (dLat * 111320 / range) * 50;
-
-                            if (x < 0 || x > 100 || y < 0 || y > 100) return null;
-
-                            return (
-                                <div 
-                                    key={idx}
-                                    className="absolute w-6 h-6 -ml-3 -mt-3 flex items-center justify-center"
-                                    style={{ left: `${x}%`, top: `${y}%` }}
-                                >
-                                    <span className="text-xl animate-pulse drop-shadow-[0_0_5px_rgba(255,255,255,0.8)]">
-                                        {s.emoji || '💎'}
-                                    </span>
-                                </div>
-                            );
-                        })}
-                        
-                        {/* 中心使用者圖標 */}
-                        <div className="relative w-4 h-4 bg-white rounded-full shadow-[0_0_15px_white] z-10">
-                            <div className="absolute inset-0 animate-ping bg-white rounded-full opacity-50" />
-                        </div>
-                    </div>
-
-                    {/* 頂部資訊欄 */}
-                    <div className="absolute top-0 left-0 w-full p-4 flex justify-between items-start bg-gradient-to-b from-black/80 to-transparent z-20">
-                        <div>
-                            <h2 className="text-green-500 font-black text-xl italic tracking-tighter">SKW RADAR</h2>
-                            <div className="flex items-center gap-2 text-[10px] text-green-700 font-mono">
-                                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                                SATELLITE SYNC ACTIVE
-                            </div>
-                        </div>
-                        <div className="text-right font-mono">
-                            <div className="text-green-500 text-sm">MISSION: {missionId}</div>
-                            <div className="text-[10px] text-green-800">
-                                {userPos ? `${userPos.lat.toFixed(6)}, ${userPos.lng.toFixed(6)}` : 'WAITING FOR GPS...'}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* 右側管理按鈕 (模擬管理模式) */}
-                    <div className="absolute top-16 right-4 z-20">
-                        <button className="bg-black/60 border border-green-900/50 p-2 rounded text-[10px] text-green-800 uppercase hover:text-green-400 transition-colors">
-                            Admin Panel
-                        </button>
-                    </div>
-
-                    {/* 底部縮放控制 */}
-                    <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex gap-4 z-20">
-                        {[1, 5, 10, 50].map(z => (
-                            <button 
-                                key={z}
-                                onClick={() => setZoom(z)}
-                                className={`w-12 h-12 rounded-full border-2 flex items-center justify-center font-bold transition-all ${
-                                    zoom === z 
-                                    ? 'bg-green-500 text-black border-white scale-110 shadow-[0_0_15px_rgba(34,197,94,0.5)]' 
-                                    : 'bg-black/80 text-green-500 border-green-900 opacity-60'
-                                }`}
-                            >
-                                {z}x
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* 狀態提示 */}
-                    <div className="absolute bottom-4 right-4 text-[10px] font-mono text-green-900">
-                        v2.5.0-STABLE | CLOUD_SYNC_ENABLED
+                    <div class="text-center border-l border-gray-800 pl-3">
+                        <div class="text-[9px] opacity-40 uppercase">GPS</div>
+                        <div id="gpsStatusDot" class="w-3 h-3 rounded-full bg-red-600 animate-pulse mt-1 mx-auto" title="等待定位..."></div>
                     </div>
                 </div>
-            );
-        };
+                <button onclick="openLeaderAuth()" class="radar-btn ui-element tracking-tight">領袖控制台</button>
+            </div>
+            
+            <div class="flex justify-between items-end">
+                <div class="flex flex-col gap-2 ui-element">
+                    <button onclick="changeZoom(1)" id="z1" class="radar-btn w-12 h-10 text-base">1x</button>
+                    <button onclick="changeZoom(5)" id="z5" class="radar-btn w-12 h-10 text-base border-white text-white scale-110">5x</button>
+                    <button onclick="changeZoom(10)" id="z10" class="radar-btn w-12 h-10 text-base">10x</button>
+                </div>
+                <div class="text-right bg-black/50 p-2 rounded ui-element border border-green-950">
+                    <div class="text-[10px] opacity-40 uppercase font-bold text-green-700">Stations</div>
+                    <div id="objCount" class="text-5xl font-black text-green-400 leading-none">00</div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
+    <div id="collectModal" class="modal hidden animate-in fade-in zoom-in duration-300">
+        <div class="text-xs text-green-500 mb-4 tracking-widest uppercase italic font-bold">--- Target Found ---</div>
+        <div id="patternDisplay" class="pattern-content flex items-center justify-center w-full min-h-[150px]"></div>
+        <div id="patternLabel" class="text-green-400 font-mono mb-10 text-sm bg-green-900/30 px-4 py-1.5 rounded-full border border-green-800">STATION: ---</div>
+        <button onclick="closeCollectModal()" class="radar-btn px-16 py-4 text-xl font-black bg-green-600 text-black border-none rounded-full shadow-2xl shadow-green-900">接收數據並返回</button>
+    </div>
+
+    <div id="leaderPanel" class="fixed inset-0 z-[200] bg-black hidden flex flex-col p-5 overflow-y-auto animate-in slide-in-from-bottom duration-300">
+        
+        <div id="authBox" class="flex-grow flex flex-col items-center justify-center">
+            <div class="text-5xl mb-6">🔐</div>
+            <h2 class="text-xl mb-8 font-bold tracking-widest text-green-500">Security Access</h2>
+            <input type="password" id="leaderPass" placeholder="****" class="bg-gray-900 border border-gray-800 text-center text-5xl w-64 p-4 mb-10 outline-none text-white rounded-xl tracking-[0.3em] focus:border-green-500">
+            <div class="flex gap-4 w-64 ui-element">
+                <button onclick="closeLeader()" class="flex-1 radar-btn py-3 text-sm">取消 EXIT</button>
+                <button onclick="verifyLeader()" class="flex-1 radar-btn bg-green-700 border-none text-black font-black py-3 text-sm rounded-lg">驗證 LOGIN</button>
+            </div>
+        </div>
+
+        <div id="dropBox" class="hidden space-y-6 pb-20 ui-element">
+            <div class="flex justify-between items-start border-b border-gray-800 pb-4">
+                <div>
+                    <h2 class="text-2xl font-black italic text-white">CONTROL PANEL</h2>
+                    <span class="text-xs text-gray-500 font-mono">CHANNEL: <span id="adminMid" class="text-green-500 font-bold"></span></span>
+                    <span id="rootBadge" class="hidden text-[9px] bg-amber-600 text-black px-1.5 py-0.5 rounded ml-1 font-bold">ROOT</span>
+                </div>
+                <button onclick="closeLeader()" class="text-gray-600 text-xs border border-gray-800 px-3 py-1 rounded-full">關閉</button>
+            </div>
+
+            <div class="flex bg-gray-900 rounded-lg p-1 border border-gray-800">
+                <button onclick="switchMode('emoji')" id="m-emoji" class="tab-btn tab-active">Emoji</button>
+                <button onclick="switchMode('text')" id="m-text" class="tab-btn">文字提示</button>
+                <button onclick="switchMode('image')" id="m-image" class="tab-btn">圖片連結</button>
+            </div>
+
+            <div class="admin-card space-y-4 border-gray-700">
+                <div id="emojiSection" class="grid grid-cols-5 gap-2.5"></div>
+                
+                <div id="textSection" class="hidden">
+                    <textarea id="customTextInput" rows="4" placeholder="輸入任務提示、藏寶指令、或下一個地點的線索..." 
+                        class="w-full bg-black border border-gray-700 p-3 rounded-lg text-white text-sm focus:border-green-500 outline-none font-sans leading-relaxed"></textarea>
+                </div>
+                
+                <div id="imageSection" class="hidden space-y-3">
+                    <div class="text-[11px] text-amber-500 bg-amber-900/20 p-2 rounded-md border border-amber-900">提示：支援 Google Drive 分享連結與一般圖片網址(.jpg, .png)。</div>
+                    <input type="text" id="imageLinkInput" oninput="previewImage(this.value)" placeholder="貼上圖片 URL" 
+                        class="w-full bg-black border border-gray-700 p-3 rounded-lg text-white text-sm focus:border-green-500 outline-none font-mono">
+                    <div id="previewContainer" class="bg-black border border-dashed border-gray-800 rounded-lg min-h-[120px] flex items-center justify-center overflow-hidden p-2">
+                        <span class="text-gray-700 text-xs italic">圖片預覽區</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-2">
+                <button id="dropBtn" onclick="dropItem()" class="w-full bg-white text-black font-black py-5 rounded-2xl active:scale-[0.97] transition-all shadow-lg text-lg uppercase tracking-wider">
+                    在目前位置投放站點
+                </button>
+                <div id="gpsAccuracyWarning" class="hidden text-center text-xs text-amber-500 bg-amber-900/30 py-2 rounded-lg border border-amber-900 animate-pulse">
+                    ⚠️ GPS 訊號不穩 (誤差 > 20m)，建議等待訊號變綠再投放。
+                </div>
+            </div>
+
+            <div class="pt-6 border-t border-gray-800">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xs font-black text-gray-500 uppercase tracking-widest italic">Deployed Stations ({count})</h3>
+                </div>
+                <div id="droppedList" class="space-y-2.5"></div>
+            </div>
+
+            <div id="rootSection" class="hidden pt-8 mt-8 border-t-2 border-dashed border-red-950 space-y-4 bg-red-950/10 p-4 rounded-xl">
+                <h3 class="text-sm font-bold text-red-500 tracking-tight">超級管理員工具 (危險區域)</h3>
+                <div class="flex gap-3">
+                    <button onclick="exportData()" class="flex-1 bg-gray-800 text-white text-xs py-3 rounded-lg font-bold border border-gray-700">匯出/備份資料 (JSON)</button>
+                    <button onclick="purgeChannelData()" class="flex-1 bg-red-700 text-white text-xs py-3 rounded-lg font-bold border border-red-900">清空此頻道資料</button>
+                </div>
+            </div>
+
+            <button onclick="closeLeader()" class="w-full text-gray-700 text-xs py-10 tracking-widest">--- CLOSE PANEL ---</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 配置與狀態 ---
+        const DEFAULT_EMOJIS = ["🔴", "⭐", "💎", "🔥", "⚡", "🍀", "🌀", "🛡️", "🔑", "🛸", "🐲", "🧿", "🎁", "🚩", "🧭"];
+        const STORAGE_KEY = 'skw_radar_v51_pro';
+        const TRIGGER_DISTANCE = 15; // 觸發藏寶的距離 (公尺)
+        const GPS_ACCURACY_LIMIT = 20; // GPS 投放理想精度 (公尺)
+
+        let currentMission = "";
+        // 資料結構: { 'SKW1': [{id, lat, lng, type, content}, ...], 'SKW2': [...] }
+        let allData = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+        
+        let userPos = null;
+        let gpsAccuracy = 0;
+        let watchId = null;
+        
+        let zoom = 5; // 預設 5x
+        let dropType = 'emoji';
+        let selectedEmojiIdx = 0;
+        let isRoot = false; // 是否為超級管理員
+
+        // 戶外尋寶通常不需要重複觸發，增加一個 Set 記錄這一次開啟已找過的點
+        let sessionFoundIds = new Set();
+
+        // --- 核心初始化 ---
+
+        // 初始化 Emoji 選擇介面
+        function initAdminUI() {
+            const grid = document.getElementById('emojiSection');
+            grid.innerHTML = '';
+            DEFAULT_EMOJIS.forEach((p, i) => {
+                const btn = document.createElement('button');
+                btn.className = `p-2.5 border border-gray-800 rounded-xl text-3xl transition-all aspect-square flex items-center justify-center ui-element ${i === 0 ? 'bg-green-900/50 border-green-500 scale-105' : 'bg-black opacity-40'}`;
+                btn.innerHTML = p;
+                btn.onclick = () => {
+                    selectedEmojiIdx = i;
+                    document.querySelectorAll('#emojiSection button').forEach(b => b.classList.remove('bg-green-900/50', 'border-green-500', 'scale-105', 'opacity-100'));
+                    document.querySelectorAll('#emojiSection button').forEach(b => b.classList.add('bg-black', 'opacity-40'));
+                    btn.classList.remove('bg-black', 'opacity-40');
+                    btn.classList.add('bg-green-900/50', 'border-green-500', 'scale-105', 'opacity-100');
+                };
+                grid.appendChild(btn);
+            });
+        }
+
+        // 開始任務：設定頻道並啟動 GPS
+        function startMission() {
+            const rawId = document.getElementById('missionIdInput').value;
+            const id = rawId.trim().toUpperCase().replace(/\s/g, ''); // 去空格、轉大寫
+            if (!id) return alert("請輸入任務頻道 ID");
+            
+            currentMission = id;
+            document.getElementById('currentMissionId').innerText = id;
+            document.getElementById('adminMid').innerText = id;
+            
+            document.getElementById('bootScreen').classList.add('hidden');
+            document.getElementById('radarMain').classList.remove('hidden');
+            
+            initGPS();
+        }
+
+        // --- GPS 邏輯 (補強：增加藍點與精度監測) ---
+
+        function initGPS() {
+            if (!navigator.geolocation) {
+                alert("此設備不支援 GPS 定位，無法使用雷達。");
+                return;
+            }
+
+            const statusDot = document.getElementById('gpsStatusDot');
+
+            // watchPosition 持續監聽
+            watchId = navigator.geolocation.watchPosition(
+                (p) => {
+                    userPos = { lat: p.coords.latitude, lng: p.coords.longitude };
+                    gpsAccuracy = p.coords.accuracy;
+
+                    // 更新 UI 狀態燈
+                    statusDot.classList.remove('bg-red-600', 'animate-pulse');
+                    if (gpsAccuracy <= GPS_ACCURACY_LIMIT) {
+                        statusDot.classList.remove('bg-amber-500');
+                        statusDot.classList.add('bg-green-500'); // 訊號良好
+                        document.getElementById('gpsAccuracyWarning').classList.add('hidden');
+                    } else {
+                        statusDot.classList.remove('bg-green-500');
+                        statusDot.classList.add('bg-amber-500'); // 訊號普通
+                        if(!document.getElementById('dropBox').classList.contains('hidden')){
+                            document.getElementById('gpsAccuracyWarning').classList.remove('hidden');
+                        }
+                    }
+
+                    // 核心邏輯
+                    checkArrival(); // 檢查是否到達寶藏
+                    updateRadarItems(); // 更新雷達紅點 (藍點固定在中心)
+                },
+                (err) => {
+                    console.error("GPS Error:", err);
+                    statusDot.classList.add('bg-red-600', 'animate-pulse');
+                    // 戶外尋寶常見 GPS 臨時斷訊，不彈 Alert 打斷體驗，僅以紅燈提示
+                },
+                { 
+                    enableHighAccuracy: true, // 強制使用精確定位 (耗電但尋寶必需)
+                    maximumAge: 0, // 不使用快取
+                    timeout: 10000 // 10秒逾時
+                }
+            );
+        }
+
+        // 核心計算：檢查距離並觸發彈窗
+        function checkArrival() {
+            if (!userPos || !allData[currentMission]) return;
+
+            allData[currentMission].forEach(item => {
+                // 如果這一趴已經找過了，就不再觸發
+                if (sessionFoundIds.has(item.id)) return;
+
+                const dist = calculateDistance(userPos.lat, userPos.lng, item.lat, item.lng);
+                
+                // 到達 15 公尺範圍
+                if (dist < TRIGGER_DISTANCE) {
+                    showCollectionModal(item);
+                    sessionFoundIds.add(item.id); // 標記為已找到
+
+                    // 如果有的話，觸發設備震動 (體感加分)
+                    if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
+                }
+            });
+        }
+
+        // --- 雷達渲染邏輯 (紅點標示藏寶) ---
+
+        function updateRadarItems() {
+            if (!userPos) return;
+            const container = document.getElementById('itemsContainer');
+            container.innerHTML = ''; // 清空重新繪製
+
+            const items = allData[currentMission] || [];
+            
+            // 根據 Zoom 決定顯示範圍 (公尺)
+            // 5x 誤差約 60公尺，適合最後衝刺
+            const rangeMeters = 300 / zoom; 
+
+            items.forEach(item => {
+                const dLat = item.lat - userPos.lat;
+                const dLng = item.lng - userPos.lng;
+
+                // 簡單的 Mercator 投影近似 (小範圍內準確)
+                // 1 緯度約 111320 公尺
+                const yPos = 50 - (dLat * 111320 / rangeMeters) * 50;
+                // 經度長度隨緯度縮放
+                const lngFactor = 111320 * Math.cos(userPos.lat * Math.PI / 180);
+                const xPos = 50 + (dLng * lngFactor / rangeMeters) * 50;
+
+                // 嚴格過濾：只顯示在雷達圓圈內的點 (0%~100%)
+                if (xPos >= 0 && xPos <= 100 && yPos >= 0 && yPos <= 100) {
+                    const el = document.createElement('div');
+                    el.className = 'radar-item';
+                    el.style.left = `${xPos}%`; 
+                    el.style.top = `${yPos}%`;
+                    
+                    // 如果是這一趴已經找過的點，讓它變透明或變色 (區分已找/未找)
+                    const opacity = sessionFoundIds.has(item.id) ? 'opacity-30' : 'opacity-100';
+                    el.innerHTML = `<div class="item-dot ${opacity}"></div>`;
+                    
+                    container.appendChild(el);
+                }
+            });
+
+            // 更新站點總數顯示
+            document.getElementById('objCount').innerText = items.length.toString().padStart(2, '0');
+        }
+
+        // 切換縮放倍率
+        function changeZoom(z) {
+            zoom = z;
+            // UI 反饋
+            document.querySelectorAll('.radar-btn[id^="z"]').forEach(b => {
+                b.classList.remove('border-white', 'text-white', 'scale-110');
+            });
+            document.getElementById(`z${z}`).classList.add('border-white', 'text-white', 'scale-110');
+            
+            updateRadarItems(); // 立即重繪
+        }
+
+        // --- 彈窗與多媒體邏輯 (齊全功能) ---
+
+        function showCollectionModal(item) {
+            const display = document.getElementById('patternDisplay');
+            display.innerHTML = ''; // 清空
+            
+            if (item.type === 'emoji') {
+                display.className = 'pattern-content';
+                display.innerText = DEFAULT_EMOJIS[item.content];
+            } else if (item.type === 'text') {
+                display.className = 'pattern-content text-content px-4';
+                display.innerText = item.content; // 純文字提示
+            } else if (item.type === 'image') {
+                display.className = 'pattern-content p-1';
+                const img = document.createElement('img');
+                img.src = item.content; // 圖片連結
+                img.className = 'max-h-[45vh] w-auto rounded-xl border-4 border-white shadow-2xl animate-in fade-in duration-500';
+                img.onerror = function() {
+                    this.parentElement.innerHTML = '<div class="text-xl text-red-500 font-bold">[圖片載入失敗]<br><span class="text-xs text-gray-600">請檢查網路或連結</span></div>';
+                };
+                display.appendChild(img);
+            }
+            
+            // 顯示站點 ID 後四碼，增加科技感
+            document.getElementById('patternLabel').innerText = `STATION: ${item.id.toString().slice(-4)}`;
+            document.getElementById('collectModal').classList.remove('hidden');
+        }
+
+        function closeCollectModal() {
+            document.getElementById('collectModal').classList.add('hidden');
+        }
+
+        // --- 管理員/領袖邏輯 (補強：分級權限、備份、GPS 警告) ---
+
+        function openLeaderAuth() {
+            document.getElementById('leaderPanel').classList.remove('hidden');
+            // 預設回到驗證畫面，防止 成員 拿到手機直接操作
+            document.getElementById('authBox').classList.remove('hidden');
+            document.getElementById('dropBox').classList.add('hidden');
+            document.getElementById('leaderPass').value = '';
+        }
+
+        //
