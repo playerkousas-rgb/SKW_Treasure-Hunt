@@ -1,18 +1,38 @@
 <!DOCTYPE html>
+
 <html lang="zh-Hant">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>龍珠雷達 - Treasure Hunt</title>
-    <!-- 引入 Tailwind CSS (CDN 版本，方便開發) -->
-    <script src="https://cdn.tailwindcss.com"></script>
-  </head>
-  <body class="bg-zinc-900">
-    <!-- React 會將組件掛載到這個 id 為 root 的 div 中 -->
-    <div id="root"></div>
-    
-    <!-- 這裡指向你的入口程式碼 -->
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+<meta charset="UTF-8" />
+<link rel="icon" type="image/svg+xml" href="/vite.svg" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>龍珠雷達 - 尋寶遊戲</title>
+
+<!-- 1. 引入 Tailwind CSS CDN，讓畫面的樣式能立刻生效 -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+  /* 確保背景是黑色的，避免閃爍 */
+  body {
+    background-color: #000;
+    margin: 0;
+    color: white;
+  }
+</style>
+
+
+</head>
+<body>
+<!-- 2. 這是最關鍵的：React 渲染的掛載點 -->
+<div id="root">
+<!-- 在 React 還沒載入前，顯示一個簡單的讀取字樣，方便我們除錯 -->
+<div style="display: flex; justify-content: center; align-items: center; height: 100vh;">
+<p>雷達系統啟動中...</p>
+</div>
+</div>
+
+<!-- 3. 引入入口程式碼，注意路徑必須對應你資料夾結構中的 main.jsx -->
+<script type="module" src="/src/main.jsx"></script>
+
+
+</body>
 </html>
