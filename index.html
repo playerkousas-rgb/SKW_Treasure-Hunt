@@ -315,40 +315,33 @@ function updateRadarItems(){
   container.innerHTML='';
   const items=allData[currentMission]||[];
   const rangeMeters=300/zoom;
+  
   items.forEach(item=>{
     const dLat=item.lat-userPos.lat;
     const dLng=item.lng-userPos.lng;
     const yPos = 50 - (dLat*111320/rangeMeters)*50;
-    const xPos = 50 + (dLng * (111320 * Math.cos(userPos.lat * Math.PI / 180)) / rangeMeters * 50);  // ← 已修正
+    const xPos = 50 + (dLng * (111320 * Math.cos(userPos.lat * Math.PI / 180)) / rangeMeters * 50);
+    
     if(xPos<0||xPos>100||yPos<0||yPos>100)return;
+    
     const el=document.createElement('div');
     el.className='radar-item';
     el.style.left=`${xPos}%`; el.style.top=`${yPos}%`;
     const opacity=sessionFoundIds.has(item.id)?'opacity-30':'opacity-100';
-   el.innerHTML=`<div class="item-dot ${opacity}"></div>`;
+    el.innerHTML=`<div class="item-dot ${opacity}"></div>`;
     container.appendChild(el);
-  }); // <-- 這是原本項目的迴圈結束
+  }); 
 
-  // --- 這裡是你新增的進度顯示邏輯 (約 228 行) ---
+  // --- 計算進度並更新右下角數字 ---
   const totalCount = items.length;
   const foundCount = items.filter(it => sessionFoundIds.has(it.id)).length;
-  const displayFound = String(foundCount).padStart(2, '0');
-  const displayTotal = String(totalCount).padStart(2, '0');
-  document.getElementById('objCount').innerText = displayFound + '/' + displayTotal;
-}
-
-  // --- 這裡開始修改 ---
-  const totalCount = items.length;
-  // 過濾出那些 ID 已經存在於 sessionFoundIds (已踩過) 的項目
-  const foundCount = items.filter(it => sessionFoundIds.has(it.id)).length;
-
-  // 格式化顯示為 01/05 (padStart 確保兩位數)
   const displayFound = String(foundCount).padStart(2, '0');
   const displayTotal = String(totalCount).padStart(2, '0');
   
   document.getElementById('objCount').innerText = displayFound + '/' + displayTotal;
-  // --- 這裡結束修改 ---
 }
+
+// 這裡緊接著就是 changeZoom 函數
 function changeZoom(z){
   zoom=z;
   document.querySelectorAll('.radar-btn[id^="z"]').forEach(b=>b.classList.remove('border-white','text-white','scale-110'));
