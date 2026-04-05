@@ -1,15 +1,18 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-Hant">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>SKW Dragon Radar - React Edition</title>
-    <!-- Tailwind CSS CDN -->
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>龍珠雷達 - Treasure Hunt</title>
+    <!-- 引入 Tailwind CSS (CDN 版本，方便開發) -->
     <script src="https://cdn.tailwindcss.com"></script>
   </head>
-  <body>
+  <body class="bg-zinc-900">
+    <!-- React 會將組件掛載到這個 id 為 root 的 div 中 -->
     <div id="root"></div>
-    <!-- 在本地開發或 Vite 環境中，通常會使用 <script type="module" src="/src/main.jsx"></script> -->
-    <!-- 這裡我們定義 App 邏輯將由 App.jsx 渲染到 #root -->
+    
+    <!-- 這裡指向你的入口程式碼 -->
+    <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
