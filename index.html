@@ -1,167 +1,393 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>尋寶雷達系統</title>
-    <!-- 載入必要腳本 -->
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.0/lucide.min.css" rel="stylesheet">
-    <style>
-        @keyframes radar-spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
+import React, { useState, useEffect, useRef } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { getFirestore, doc, setDoc, collection, onSnapshot, query, deleteDoc, addDoc, getDocs } from 'firebase/firestore';
+
+/**
+ * 龍珠雷達雲端版 (Cloud Dragon Radar)
+ * 整合 Firebase 實時同步、GPS 追蹤與管理員投放功能
+ */
+
+// --- Firebase 初始化 ---
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'dragon-radar-v6';
+
+const DEFAULT_EMOJIS = ["🔴", "⭐", "💎", "🔥", "⚡", "🍀", "🌀", "🛡️", "🔑", "🛸", "🐲", "🧿", "🎁", "🚩", "🧭"];
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [missionId, setMissionId] = useState('');
+  const [isStarted, setIsStarted] = useState(false);
+  const [userPos, setUserPos] = useState(null);
+  const [stations, setStations] = useState([]);
+  const [showLeader, setShowLeader] = useState(false);
+  const [isAuthed, setIsAuthed] = useState(false);
+  const [isAdminMode, setIsAdminMode] = useState(false); 
+  const [pass, setPass] = useState('');
+  const [dropType, setDropType] = useState('emoji');
+  const [selectedEmoji, setSelectedEmoji] = useState(0);
+  const [customText, setCustomText] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [zoom, setZoom] = useState(5);
+  const [foundModal, setFoundModal] = useState(null);
+  const [isConfirmingClear, setIsConfirmingClear] = useState(false);
+
+  // 1. 初始化驗證 (符合 Rule 3)
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
         }
-        .radar-line {
-            animation: radar-spin 4s linear infinite;
-        }
-        body { background-color: #020617; color: #f8fafc; margin: 0; overflow: hidden; }
-    </style>
-</head>
-<body>
-    <div id="root"></div>
+      } catch (e) {
+        console.error("Auth Error:", e);
+      }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+        setUser(u);
+    });
+    return () => unsubscribe();
+  }, []);
 
-    <script type="text/babel">
-        const { useState, useEffect } = React;
+  // 2. 監聽 GPS
+  useEffect(() => {
+    if (!isStarted) return;
+    const watchId = navigator.geolocation.watchPosition(
+      (p) => setUserPos({ lat: p.coords.latitude, lng: p.coords.longitude }),
+      (err) => console.error("GPS Error:", err),
+      { enableHighAccuracy: true }
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [isStarted]);
 
-        // 模擬 Lucide 圖標 (因為 CDN 版本稍有不同)
-        const Icon = ({ name, className }) => <i data-lucide={name} className={className}></i>;
+  // 3. 雲端數據同步 (符合 Rule 1 & 2)
+  useEffect(() => {
+    if (!db || !user || !missionId || !isStarted) return;
 
-        function App() {
-            const [view, setView] = useState('login'); // login, radar, admin
-            const [missionId, setMissionId] = useState('');
-            const [userPos, setUserPos] = useState({ lat: 25.0339, lng: 121.5644 }); // 預設台北
-            const [treasures, setTreasures] = useState([]);
-            const [isLoading, setIsLoading] = useState(true);
+    const q = collection(db, 'artifacts', appId, 'public', 'data', `mission_${missionId}`);
+    const unsubscribe = onSnapshot(q, 
+      (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setStations(data);
+      }, 
+      (err) => {
+        console.warn("Snapshot error (Check Security Rules):", err);
+      }
+    );
 
-            // 模擬系統啟動
-            useEffect(() => {
-                setTimeout(() => setIsLoading(false), 2000);
-            }, []);
+    return () => unsubscribe();
+  }, [user, missionId, isStarted]);
 
-            // 模擬獲取地理位置
-            useEffect(() => {
-                if (navigator.geolocation) {
-                    navigator.geolocation.watchPosition(
-                        (pos) => setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-                        (err) => console.log("GPS 無法取得，使用模擬座標")
-                    );
-                }
-            }, []);
+  // 4. 碰撞偵測：距離計算 (15公尺內觸發)
+  useEffect(() => {
+    if (!userPos || stations.length === 0) return;
+    stations.forEach(s => {
+      const dist = calculateDistance(userPos.lat, userPos.lng, s.lat, s.lng);
+      if (dist < 15 && !foundModal) {
+        setFoundModal(s);
+      }
+    });
+  }, [userPos, stations, foundModal]);
 
-            const handleJoin = () => {
-                if (missionId) setView('radar');
-            };
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371e3;
+    const f1 = lat1 * Math.PI/180;
+    const f2 = lat2 * Math.PI/180;
+    const df = (lat2-lat1) * Math.PI/180;
+    const dl = (lon2-lon1) * Math.PI/180;
+    const a = Math.sin(df/2)*Math.sin(df/2) + Math.cos(f1)*Math.cos(f2)*Math.sin(dl/2)*Math.sin(dl/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  };
 
-            if (isLoading) {
-                return (
-                    <div className="h-screen w-screen flex flex-col items-center justify-center">
-                        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                        <p className="tracking-widest animate-pulse text-blue-400 font-bold">雷達系統啟動中...</p>
-                    </div>
-                );
-            }
+  const handleVerify = () => {
+    if (pass === '0728') {
+      setIsAuthed(true);
+      setIsAdminMode(true);
+    } else if (pass === '1234') {
+      setIsAuthed(true);
+      setIsAdminMode(false);
+    } else {
+      setPass('');
+    }
+  };
 
-            return (
-                <div className="h-screen w-screen flex flex-col font-sans">
-                    {/* Header */}
-                    <header className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
-                        <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-                            <span className="font-black text-lg">TREASURE RADAR</span>
-                        </div>
-                        {view !== 'login' && (
-                            <button onClick={() => setView('login')} className="text-xs text-slate-500 underline">登出系統</button>
-                        )}
-                    </header>
+  const handleDrop = async () => {
+    if (!user || !userPos || !isAuthed) return;
+    let content = "";
+    if (dropType === 'emoji') content = selectedEmoji;
+    else if (dropType === 'text') content = customText;
+    else if (dropType === 'image') content = imageUrl;
 
-                    <main className="flex-1 flex flex-col items-center justify-center p-6 relative">
-                        
-                        {view === 'login' && (
-                            <div className="w-full max-w-sm space-y-6 text-center animate-in fade-in zoom-in duration-500">
-                                <div>
-                                    <h2 className="text-3xl font-bold mb-2">連結同步器</h2>
-                                    <p className="text-slate-400 text-sm">請輸入任務編號以同步衛星數據</p>
-                                </div>
-                                <input 
-                                    type="text" 
-                                    className="w-full bg-slate-900 border border-slate-700 p-4 rounded-xl text-center text-xl font-mono uppercase focus:border-blue-500 outline-none"
-                                    placeholder="SKW-XXX"
-                                    value={missionId}
-                                    onChange={(e) => setMissionId(e.target.value.toUpperCase())}
-                                />
-                                <button 
-                                    onClick={handleJoin}
-                                    className="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold text-lg transition-all active:scale-95"
-                                >
-                                    開始掃描
-                                </button>
-                            </div>
-                        )}
+    if (dropType !== 'emoji' && !content) return;
 
-                        {view === 'radar' && (
-                            <div className="flex flex-col items-center w-full">
-                                {/* 雷達主體 */}
-                                <div className="relative w-72 h-72 rounded-full border-2 border-blue-500/30 flex items-center justify-center bg-slate-900/20 shadow-[0_0_50px_rgba(59,130,246,0.1)] overflow-hidden">
-                                    {/* 掃描線 */}
-                                    <div className="absolute inset-0 radar-line" style={{ background: 'conic-gradient(from 0deg, transparent, rgba(59,130,246,0.2))' }}></div>
-                                    
-                                    {/* 中心點 */}
-                                    <div className="w-3 h-3 bg-white rounded-full shadow-[0_0_10px_white] z-10"></div>
-                                    
-                                    {/* 裝飾網格 */}
-                                    <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'radial-gradient(circle, #3b82f6 1px, transparent 1px)', backgroundSize: '20px 20px'}}></div>
-                                </div>
+    const colRef = collection(db, 'artifacts', appId, 'public', 'data', `mission_${missionId}`);
+    try {
+        await addDoc(colRef, {
+            lat: userPos.lat,
+            lng: userPos.lng,
+            type: dropType,
+            content: content,
+            timestamp: Date.now(),
+            createdBy: user.uid
+        });
+        setCustomText('');
+        setImageUrl('');
+    } catch (e) {
+        console.error("Drop failed:", e);
+    }
+  };
 
-                                <div className="mt-10 grid grid-cols-2 gap-4 w-full max-w-sm">
-                                    <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800">
-                                        <p className="text-[10px] text-slate-500 uppercase font-bold">任務頻道</p>
-                                        <p className="font-mono text-blue-400">{missionId}</p>
-                                    </div>
-                                    <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800">
-                                        <p className="text-[10px] text-slate-500 uppercase font-bold">當前座標</p>
-                                        <p className="font-mono text-xs">{userPos.lat.toFixed(3)}, {userPos.lng.toFixed(3)}</p>
-                                    </div>
-                                </div>
-                                <p className="mt-8 text-slate-500 text-xs animate-pulse">正在等待管理員投放寶藏...</p>
-                                <button onClick={() => setView('admin')} className="mt-4 text-[10px] text-slate-700">管理員登入</button>
-                            </div>
-                        )}
+  const handleDelete = async (id) => {
+    if (!user) return;
+    const docRef = doc(db, 'artifacts', appId, 'public', 'data', `mission_${missionId}`, id);
+    await deleteDoc(docRef);
+  };
 
-                        {view === 'admin' && (
-                            <div className="w-full max-w-sm bg-slate-900 p-6 rounded-3xl border border-slate-800 space-y-4">
-                                <h2 className="text-xl font-bold flex items-center gap-2">
-                                    <span className="w-2 h-2 bg-red-500 rounded-full"></span> 投放控制台
-                                </h2>
-                                <div className="grid grid-cols-3 gap-2">
-                                    {['🎁', '💰', '💎', '👑', '🗺️', '🔥'].map(item => (
-                                        <button 
-                                            key={item}
-                                            className="bg-slate-800 aspect-square rounded-xl text-2xl hover:bg-slate-700 active:scale-90 transition-all"
-                                            onClick={() => alert('已投放: ' + item)}
-                                        >
-                                            {item}
-                                        </button>
-                                    ))}
-                                </div>
-                                <button onClick={() => setView('radar')} className="w-full bg-slate-800 py-3 rounded-xl text-sm">返回雷達</button>
-                            </div>
-                        )}
+  const handleClearAll = async () => {
+    if (!user) return;
+    if (!isConfirmingClear) {
+      setIsConfirmingClear(true);
+      setTimeout(() => setIsConfirmingClear(false), 3000); 
+      return;
+    }
+    const colRef = collection(db, 'artifacts', appId, 'public', 'data', `mission_${missionId}`);
+    const snapshot = await getDocs(colRef);
+    const deletePromises = snapshot.docs.map(d => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', `mission_${missionId}`, d.id)));
+    await Promise.all(deletePromises);
+    setIsConfirmingClear(false);
+  };
 
-                    </main>
+  // --- 入口登入頁面 ---
+  if (!isStarted) {
+    return (
+      <div className="fixed inset-0 bg-black flex flex-col items-center justify-center p-8 text-green-500 font-mono z-50">
+        <div className="w-24 h-24 border-4 border-green-900 rounded-full flex items-center justify-center mb-6 animate-pulse">
+          <span className="text-4xl">🛰️</span>
+        </div>
+        <h1 className="text-xl font-bold tracking-widest mb-1 text-center uppercase">SKW Cloud Radar</h1>
+        <p className="text-[10px] text-green-900 mb-8 uppercase tracking-widest">Satellite Sync Active</p>
+        <input 
+          type="text" 
+          value={missionId}
+          onChange={(e) => setMissionId(e.target.value.toUpperCase().replace(/\s/g, ''))}
+          placeholder="MISSION ID" 
+          className="bg-transparent border-b-2 border-green-900 text-center text-2xl outline-none w-full max-w-xs mb-10 text-white focus:border-green-400 placeholder:text-green-900/50"
+        />
+        <button 
+          onClick={() => missionId && setIsStarted(true)}
+          className="w-full max-w-xs bg-green-900/20 border border-green-500 py-4 font-bold rounded-lg hover:bg-green-500 hover:text-black transition-all uppercase tracking-widest active:scale-95"
+        >
+          Initialize Radar
+        </button>
+      </div>
+    );
+  }
 
-                    <footer className="p-4 text-[10px] text-center text-slate-600 font-mono tracking-widest">
-                        SECURE SATELLITE LINK // ACTIVE
-                    </footer>
+  return (
+    <div className="fixed inset-0 bg-[#0a2b16] overflow-hidden font-mono select-none">
+      {/* 背景格線層 */}
+      <div className="absolute inset-0 opacity-20 pointer-events-none" 
+        style={{ backgroundImage: 'linear-gradient(#1e6b3a 1px, transparent 1px), linear-gradient(90deg, #1e6b3a 1px, transparent 1px)', backgroundSize: '40px 40px' }}>
+      </div>
+      
+      {/* 掃描線動畫 */}
+      <div className="absolute inset-0 pointer-events-none border-b border-green-400/30 animate-[scan_4s_linear_infinite]" 
+           style={{ background: 'linear-gradient(to bottom, transparent, rgba(57, 255, 20, 0.05))' }}></div>
+
+      {/* 雷達目標點渲染 */}
+      {userPos && stations.map(s => {
+        const range = 300 / zoom;
+        const dLat = s.lat - userPos.lat;
+        const dLng = s.lng - userPos.lng;
+        // 簡單的 Mercator 投影近似，用於雷達顯示
+        const y = 50 - (dLat * 111320 / range) * 50;
+        const x = 50 + (dLng * 111320 * Math.cos(userPos.lat * Math.PI / 180) / range) * 50;
+        
+        if (x < 0 || x > 100 || y < 0 || y > 100) return null;
+        return (
+          <div key={s.id} className="absolute w-4 h-4 -translate-x-1/2 -translate-y-1/2 z-20" style={{ left: `${x}%`, top: `${y}%` }}>
+            <div className="w-full h-full bg-red-600 rounded-full border-2 border-white shadow-[0_0_15px_#f00] animate-pulse"></div>
+          </div>
+        );
+      })}
+
+      {/* 使用者位置標記 (中心點) */}
+      <div className="absolute top-1/2 left-1/2 w-3 h-3 -translate-x-1/2 -translate-y-1/2 z-30">
+        <div className="w-full h-full bg-white rounded-full shadow-[0_0_10px_#fff]"></div>
+        <div className="absolute inset-0 border border-white rounded-full animate-ping opacity-50"></div>
+      </div>
+
+      {/* 介面 UI 層 */}
+      <div className="absolute inset-0 p-4 flex flex-col justify-between pointer-events-none">
+        {/* 頂部欄 */}
+        <div className="flex justify-between items-start pointer-events-auto">
+          <div className="bg-black/80 p-3 rounded border border-green-500/30 backdrop-blur-md">
+            <div className="text-[9px] text-green-700 uppercase font-black">Satellite Sync</div>
+            <div className="text-xl font-bold text-green-400 tracking-tighter">{missionId}</div>
+          </div>
+          <button 
+            onClick={() => setShowLeader(true)} 
+            className="bg-black/80 border border-green-500 text-green-500 px-4 py-2 rounded text-xs font-black active:scale-90 transition-all uppercase shadow-lg shadow-green-500/10"
+          >
+            Admin Panel
+          </button>
+        </div>
+
+        {/* 底部欄 */}
+        <div className="flex justify-between items-end pointer-events-auto">
+          <div className="flex flex-col gap-3">
+            {[1, 5, 10].map(z => (
+              <button 
+                key={z} 
+                onClick={() => setZoom(z)} 
+                className={`w-12 h-12 rounded-full border-2 font-black transition-all shadow-xl flex items-center justify-center ${zoom === z ? 'bg-green-500 text-black border-white scale-110' : 'bg-black/80 text-green-500 border-green-500/50 opacity-60'}`}
+              >
+                {z}x
+              </button>
+            ))}
+          </div>
+          <div className="bg-black/80 p-3 rounded border border-green-500/30 text-right backdrop-blur-md">
+            <div className="text-[9px] text-green-700 uppercase font-black">Active Signals</div>
+            <div className="text-4xl font-bold text-green-400 leading-none">{stations.length.toString().padStart(2, '0')}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* 發現目標彈窗 */}
+      {foundModal && (
+        <div className="fixed inset-0 z-[1000] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-10 text-center animate-in fade-in zoom-in duration-300">
+          <div className="text-xs text-green-500 mb-6 tracking-[0.5em] uppercase animate-pulse font-black">--- Target Intercepted ---</div>
+          <div className="mb-10 transform transition-all duration-500 scale-110">
+            {foundModal.type === 'emoji' && <span className="text-[120px] drop-shadow-[0_0_30px_rgba(255,0,0,0.5)]">{DEFAULT_EMOJIS[foundModal.content]}</span>}
+            {foundModal.type === 'text' && <span className="text-3xl font-black text-white leading-relaxed px-4 block">{foundModal.content}</span>}
+            {foundModal.type === 'image' && <img src={foundModal.content} className="max-h-[50vh] max-w-full rounded-2xl border-4 border-white shadow-2xl" alt="target" />}
+          </div>
+          <button 
+            onClick={() => setFoundModal(null)} 
+            className="bg-green-500 text-black px-16 py-5 font-black rounded-full uppercase tracking-widest text-lg shadow-[0_0_20px_rgba(34,197,94,0.4)] active:scale-95 transition-all"
+          >
+            數據已接收
+          </button>
+        </div>
+      )}
+
+      {/* 後台管理面板 */}
+      {showLeader && (
+        <div className="fixed inset-0 z-[500] bg-zinc-950 p-6 overflow-y-auto font-sans text-white animate-in slide-in-from-bottom duration-300">
+          {!isAuthed ? (
+            <div className="h-full flex flex-col items-center justify-center max-w-xs mx-auto">
+              <div className="text-4xl mb-6">🔑</div>
+              <h2 className="text-green-500 mb-8 font-mono tracking-[0.3em] uppercase text-sm font-black text-center">Security Checkpoint</h2>
+              <input 
+                type="password" 
+                value={pass}
+                onChange={(e) => setPass(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
+                placeholder="****" 
+                className="bg-zinc-900 border border-zinc-800 text-center text-4xl text-white outline-none mb-10 w-full py-4 rounded-xl tracking-[0.5em] focus:border-green-500 transition-colors"
+              />
+              <div className="flex gap-4 w-full">
+                <button onClick={() => setShowLeader(false)} className="flex-1 text-zinc-500 font-black uppercase text-xs py-4">Cancel</button>
+                <button onClick={handleVerify} className="flex-1 bg-green-600 text-black py-4 rounded-xl font-black uppercase tracking-widest text-xs">Authorize</button>
+              </div>
+            </div>
+          ) : (
+            <div className="max-w-md mx-auto space-y-8 pb-32">
+              <div className="flex justify-between items-center sticky top-0 bg-zinc-950/90 backdrop-blur-md py-4 z-10 border-b border-zinc-900">
+                <div className="flex items-center gap-3">
+                  <h2 className="font-black text-2xl italic tracking-tighter uppercase">Cloud Ops</h2>
+                  {isAdminMode && <span className="bg-amber-500 text-black text-[10px] px-2 py-0.5 rounded-full font-black">SUPERUSER</span>}
                 </div>
-            );
-        }
+                <button onClick={() => setShowLeader(false)} className="bg-zinc-900 text-zinc-400 px-4 py-2 rounded-full text-xs font-black border border-zinc-800">EXIT</button>
+              </div>
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
+              <div className="space-y-6">
+                <div className="grid grid-cols-3 bg-zinc-900 p-1 rounded-xl border border-zinc-800">
+                  {['emoji', 'text', 'image'].map(m => (
+                    <button key={m} onClick={() => setDropType(m)} className={`py-3 text-xs font-black rounded-lg transition-all uppercase tracking-tighter ${dropType === m ? 'bg-green-600 text-black shadow-lg shadow-green-900/20' : 'text-zinc-500 hover:text-zinc-300'}`}>
+                      {m}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="bg-zinc-900 p-5 rounded-2xl border border-zinc-800 min-h-[160px] flex items-center justify-center">
+                  {dropType === 'emoji' && (
+                    <div className="grid grid-cols-5 gap-3 w-full">
+                      {DEFAULT_EMOJIS.map((e, i) => (
+                        <button key={i} onClick={() => setSelectedEmoji(i)} className={`text-2xl p-2 rounded-xl border-2 transition-all flex items-center justify-center aspect-square ${selectedEmoji === i ? 'bg-green-900/40 border-green-500 scale-110' : 'bg-black border-transparent opacity-30 hover:opacity-100'}`}>{e}</button>
+                      ))}
+                    </div>
+                  )}
+                  {dropType === 'text' && (
+                    <textarea value={customText} onChange={(e) => setCustomText(e.target.value)} placeholder="Enter encrypted message..." className="w-full bg-black text-white p-4 rounded-xl h-32 outline-none border border-zinc-800 focus:border-green-500 text-sm font-mono" />
+                  )}
+                  {dropType === 'image' && (
+                    <div className="w-full space-y-4">
+                      <input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://image-url.jpg" className="w-full bg-black text-white p-4 rounded-xl outline-none border border-zinc-800 focus:border-green-500 text-sm font-mono" />
+                      {imageUrl && <div className="p-2 bg-black rounded-xl border border-zinc-800"><img src={imageUrl} className="max-h-32 mx-auto rounded-lg" alt="preview" /></div>}
+                    </div>
+                  )}
+                </div>
+
+                <button onClick={handleDrop} className="w-full bg-white text-black font-black py-5 rounded-2xl shadow-2xl active:scale-[0.98] transition-all uppercase tracking-[0.2em] text-sm">
+                    Deploy to Current GPS
+                </button>
+              </div>
+
+              <div className="pt-8 space-y-4">
+                <div className="flex justify-between items-center border-b border-zinc-900 pb-4">
+                    <h3 className="text-xs font-black text-zinc-500 uppercase tracking-widest italic">Live Data Feed ({missionId})</h3>
+                    {isAdminMode && (
+                        <button 
+                            onClick={handleClearAll}
+                            className={`text-[10px] font-black px-4 py-2 rounded-full transition-all ${isConfirmingClear ? 'bg-red-600 text-white animate-pulse' : 'bg-zinc-900 text-red-500 border border-red-950'}`}
+                        >
+                            {isConfirmingClear ? 'CONFIRM PURGE' : 'PURGE ALL'}
+                        </button>
+                    )}
+                </div>
+                
+                <div className="space-y-4">
+                  {stations.length === 0 ? (
+                    <div className="text-center py-20 text-zinc-700 text-xs italic tracking-widest font-black uppercase">No Data Packets Found</div>
+                  ) : (
+                    stations.map((s, idx) => (
+                      <div key={s.id} className="bg-zinc-900 p-5 rounded-2xl flex justify-between items-center border border-zinc-800 group transition-all hover:border-zinc-700 shadow-lg">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-3">
+                            <span className="text-[10px] bg-green-900 text-green-400 px-2 py-0.5 rounded font-black tracking-widest">#{idx+1}</span>
+                            <span className="text-xs font-black text-zinc-100 uppercase tracking-tighter">{s.type} Packet</span>
+                          </div>
+                          {isAdminMode && (
+                            <div className="text-[10px] text-zinc-500 font-mono mt-1 opacity-70">
+                              {s.lat.toFixed(5)}°N, {s.lng.toFixed(5)}°E
+                            </div>
+                          )}
+                        </div>
+                        <button onClick={() => handleDelete(s.id)} className="bg-zinc-800 text-zinc-500 hover:text-red-500 hover:bg-red-500/10 p-3 rounded-full transition-all">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes scan { from { transform: translateY(-100%); } to { transform: translateY(100%); } }
+        body { background: black; overscroll-behavior-y: contain; }
+        * { -webkit-tap-highlight-color: transparent; }
+      `}} />
+    </div>
+  );
+}
