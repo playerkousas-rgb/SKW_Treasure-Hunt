@@ -1,23 +1,24 @@
-import React from 'react';
+import React, { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-// 確保 App 元件在同一個專案目錄下
 import App from './App.jsx';
 
 /**
- * 這是應用程式的進入點檔案 (Entry Point)。
- * 它負責將 React 應用程式掛載到 index.html 檔案中定義的 <div id="root"></div>。
+ * 這是應用程式的進入點 (Entry Point)
+ * 負責將 App 組件掛載到 HTML 中的 #root 元素
+ * * 修正說明：
+ * 1. 移除了 import './index.css' 以避免編譯錯誤（樣式已整合至 index.html 或 App.jsx 中）。
+ * 2. 確保導入 App.jsx 的路徑相對於此檔案是正確的。
  */
 
-const container = document.getElementById('root');
+const rootElement = document.getElementById('root');
 
-if (container) {
-  const root = createRoot(container);
-  root.render(
-    <React.StrictMode>
+if (rootElement) {
+  createRoot(rootElement).render(
+    <StrictMode>
       <App />
-    </React.StrictMode>
+    </StrictMode>
   );
 } else {
-  // 在開發環境中，如果找不到 root 節點，在控制台給予提示
-  console.error("Critical Error: 'root' element not found in index.html.");
+  // 如果找不到 root 元素，在控制台打印錯誤訊息以便除錯
+  console.error("找不到 root 元素，請檢查 index.html 是否包含 <div id='root'></div>");
 }
