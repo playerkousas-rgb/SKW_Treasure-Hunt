@@ -2,12 +2,17 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>SKW Radar v6.2 </title>
+<title>SKW Radar v6.2 - Secure Edition</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
     :root{ --radar-bg:#051a0b; --radar-grid:#154a28; --radar-glow:#39ff14; }
-    body,html{ margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#000; font-family:monospace; color:var(--radar-glow); }
+    body,html{ 
+        margin:0; padding:0; width:100%; height:100%; overflow:hidden; 
+        background:#000; font-family:monospace; color:var(--radar-glow);
+        /* 禁止手機端長按選取 */
+        -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+    }
     .radar-container{ width:100vw; height:100vh; background:var(--radar-bg); position:relative; overflow:hidden; }
     .grid-bg { position:absolute; inset:-200%; background-image: 
         linear-gradient(var(--radar-grid) 1px, transparent 1px),
@@ -21,19 +26,20 @@
     .leader-table { width:100%; border-collapse: collapse; color: white; font-size: 12px; }
     .leader-table th { background: #222; padding: 10px; border: 1px solid #444; }
     .leader-table td { padding: 10px; border: 1px solid #333; text-align: center; }
-    .zoom-btn { background: rgba(255,255,255,0.1); border: 1px solid #333; padding: 8px; border-radius: 8px; font-size: 10px; flex: 1; }
-    .zoom-btn.active { background: var(--radar-glow); color: black; border-color: white; }
+    .zoom-btn { background: rgba(255,255,255,0.1); border: 1px solid #333; padding: 8px; border-radius: 8px; font-size: 10px; flex: 1; color: #888; }
+    .zoom-btn:active { background: var(--radar-glow); color: black; }
 </style>
 </head>
-<body>
+
+<body oncontextmenu="return false" onselectstart="return false" ondragstart="return false">
 
 <div id="bootScreen" class="fixed inset-0 bg-black z-[100] flex flex-col items-center justify-center p-8">
     <h1 class="text-5xl font-black text-green-500 italic mb-2 tracking-tighter">SKW RADAR</h1>
-    <p class="text-[10px] tracking-[0.6em] text-green-900 mb-16">GLOBAL SYSTEM V6.2 DELUXE</p>
+    <p class="text-[10px] tracking-[0.6em] text-green-900 mb-16">GLOBAL SYSTEM V6.2 (C) SKWSCOUT</p>
     <div class="space-y-4 w-64">
         <input id="missionIdInput" type="text" placeholder="輸入頻道 ID" class="w-full bg-transparent border-b-2 border-green-900 text-center text-2xl uppercase text-white pb-2 outline-none focus:border-green-400">
         <button onclick="startMission()" class="w-full bg-green-600 text-black py-5 rounded-2xl font-black text-xl shadow-[0_0_30px_rgba(34,197,94,0.4)] active:scale-95">同步衛星訊號</button>
-        <button onclick="openImport()" class="w-full text-green-800 text-xs py-2">📥 導入 JSON 或 分段掃碼</button>
+        <button onclick="openImport()" class="w-full text-green-800 text-xs py-2">📥 導入數據 (JSON/分段 QR)</button>
     </div>
 </div>
 
@@ -56,12 +62,12 @@
 
         <div class="pointer-events-auto space-y-3">
             <div class="flex gap-2">
-                <button onclick="applyZoom(1)" class="zoom-btn">1X (全景)</button>
-                <button onclick="applyZoom(10)" class="zoom-btn">10X</button>
-                <button onclick="applyZoom(100)" class="zoom-btn">100X</button>
-                <button onclick="applyZoom(500)" class="zoom-btn">500X</button>
+                <button onclick="applyZoom(1)" class="zoom-btn text-white">1X</button>
+                <button onclick="applyZoom(10)" class="zoom-btn text-white">10X</button>
+                <button onclick="applyZoom(100)" class="zoom-btn text-white">100X</button>
+                <button onclick="applyZoom(500)" class="zoom-btn text-white">500X</button>
             </div>
-            <div class="bg-black/80 backdrop-blur-xl p-5 rounded-3xl border border-green-900/50 flex justify-between items-center shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+            <div class="bg-black/80 backdrop-blur-xl p-5 rounded-3xl border border-green-900/50 flex justify-between items-center shadow-2xl">
                 <div class="flex flex-col">
                     <span class="text-[9px] text-stone-500 font-bold mb-1 uppercase">Zoom Ratio</span>
                     <input id="zoomInput" type="number" value="1" onchange="updateRadar()" class="bg-transparent text-3xl font-black text-green-400 w-24 outline-none">
@@ -90,7 +96,6 @@
             <h3 class="text-2xl font-black italic">投放工具</h3>
             <div id="leaderAccDisp" class="text-xs font-bold text-red-500">ACC: ±--M</div>
         </div>
-
         <div class="bg-stone-900 p-5 rounded-3xl space-y-5">
             <div>
                 <label class="text-[10px] text-stone-500 block mb-2 font-bold uppercase tracking-widest">全景基準視距 (公尺)</label>
@@ -102,59 +107,56 @@
             </div>
             <div id="emojiGrid" class="grid grid-cols-5 gap-2"></div>
             <input id="customText" type="text" placeholder="輸入文字或圖片網址" class="w-full bg-black/50 p-4 rounded-xl text-white text-sm outline-none border border-stone-800">
-            <button id="dropBtn" onclick="dropItem()" class="w-full bg-white text-black font-black py-5 rounded-2xl shadow-xl active:scale-95 transition-all text-lg">在目前(或手動)位置投彈</button>
+            <button onclick="dropItem()" class="w-full bg-white text-black font-black py-5 rounded-2xl shadow-xl active:scale-95 transition-all text-lg">在目前(或手動)位置投彈</button>
         </div>
-
         <div class="bg-stone-900 rounded-3xl overflow-hidden border border-stone-800">
-            <div class="p-4 bg-stone-800 flex justify-between items-center">
-                <span class="font-bold text-sm text-white">點位管理 (分段導出)</span>
+            <div class="p-4 bg-stone-800 flex justify-between items-center text-white">
+                <span class="font-bold text-sm">分段管理</span>
                 <span id="charCount" class="text-green-500 font-bold text-xs">0 CHARS</span>
             </div>
-            <div class="max-h-60 overflow-y-auto">
-                <table class="leader-table">
-                    <thead><tr><th width="50">選取</th><th>編號</th><th>預覽</th></tr></thead>
-                    <tbody id="leaderTableBody"></tbody>
-                </table>
-            </div>
+            <div class="max-h-60 overflow-y-auto"><table class="leader-table"><tbody id="leaderTableBody"></tbody></table></div>
             <div class="p-4 grid grid-cols-2 gap-4">
-                <button onclick="generateQR()" class="bg-green-600 text-black font-black py-4 rounded-xl text-sm">生成分段 QR</button>
-                <button onclick="exportJSON()" class="bg-stone-700 text-white font-black py-4 rounded-xl text-sm">導出完整 JSON</button>
+                <button onclick="generateQR()" class="bg-green-600 text-black font-black py-4 rounded-xl text-xs">生成分段 QR</button>
+                <button onclick="exportJSON()" class="bg-stone-700 text-white font-black py-4 rounded-xl text-xs">複製 JSON</button>
             </div>
         </div>
-        
-        <button onclick="purgeChannel()" class="w-full py-5 text-red-600 font-bold text-xs border border-red-900/30 rounded-2xl mt-4">🗑️ 清空目前頻道數據</button>
+        <button onclick="purgeChannel()" class="w-full py-5 text-red-600 font-bold text-xs border border-red-900/30 rounded-2xl mt-4">🗑️ 清空數據</button>
         <button onclick="closeLeader()" class="w-full text-stone-600 font-bold py-6">返回雷達</button>
     </div>
 </div>
 
 <div id="foundModal" class="modal hidden">
-    <div class="text-[10px] tracking-[0.5em] text-green-500 mb-8 uppercase">Signal Captured</div>
-    <div id="foundContent" class="text-6xl mb-12 min-h-[150px] flex items-center justify-center"></div>
-    <button onclick="closeFound()" class="bg-green-600 text-black px-20 py-5 rounded-full font-black text-2xl shadow-2xl">收妥數據</button>
+    <div id="foundContent" class="text-6xl mb-12 flex items-center justify-center"></div>
+    <button onclick="closeFound()" class="bg-green-600 text-black px-20 py-5 rounded-full font-black text-2xl">收妥數據</button>
 </div>
 
 <div id="qrModal" class="modal hidden">
-    <div class="bg-white p-6 rounded-3xl mb-8">
-        <div id="qrcode" class="w-64 h-64 flex items-center justify-center"></div>
-    </div>
-    <p class="text-white font-bold mb-8 text-center text-sm px-10">請隊員掃描此 QR 以追加點位數據<br><span class="text-stone-500 text-[10px]">(數據將會自動合成，不覆蓋舊點位)</span></p>
-    <button onclick="this.parentElement.classList.add('hidden')" class="bg-stone-800 text-white px-12 py-3 rounded-full font-bold">關閉</button>
+    <div class="bg-white p-6 rounded-3xl mb-8"><div id="qrcode"></div></div>
+    <button onclick="this.parentElement.classList.add('hidden')" class="text-white font-bold">關閉</button>
 </div>
 
 <div id="importModal" class="modal hidden">
-    <h2 class="text-green-500 font-black mb-8 italic text-xl">導入/追加數據</h2>
-    <textarea id="jsonIn" rows="8" class="w-full bg-black border border-stone-800 p-5 rounded-2xl text-green-400 text-xs font-mono mb-10 outline-none" placeholder="在此貼上 JSON 數據..."></textarea>
+    <textarea id="jsonIn" rows="8" class="w-full bg-black border border-stone-800 p-5 rounded-2xl text-green-400 text-xs mb-8" placeholder="在此貼上 JSON..."></textarea>
     <div class="flex gap-4 w-full">
-        <button onclick="this.parentElement.parentElement.classList.add('hidden')" class="flex-1 text-stone-600 font-bold">取消</button>
-        <button onclick="processImport()" class="flex-1 bg-green-600 text-black py-4 rounded-xl font-black">合併並啟動</button>
+        <button onclick="this.parentElement.parentElement.classList.add('hidden')" class="flex-1 text-stone-600">取消</button>
+        <button onclick="processImport()" class="flex-1 bg-green-600 text-black py-4 rounded-xl font-black">合併數據</button>
     </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
-// --- 核心變數與初始化 ---
+// --- [防君子開關] 禁止鍵盤 F12, Ctrl+U 等 ---
+document.onkeydown = function(e) {
+    if (e.keyCode == 123) return false; // F12
+    if (e.ctrlKey && e.shiftKey && e.keyCode == 'I'.charCodeAt(0)) return false; // Ctrl+Shift+I
+    if (e.ctrlKey && e.shiftKey && e.keyCode == 'C'.charCodeAt(0)) return false; // Ctrl+Shift+C
+    if (e.ctrlKey && e.shiftKey && e.keyCode == 'J'.charCodeAt(0)) return false; // Ctrl+Shift+J
+    if (e.ctrlKey && e.keyCode == 'U'.charCodeAt(0)) return false; // Ctrl+U
+};
+
+// --- [核心代碼] ---
 const EMOJIS = ["🔴","⭐","💎","🔥","⚡","🍀","🌀","🛡️","🔑","🛸","🐲","🧿","🎁","🚩","🧭"];
-const STORAGE_KEY = 'skw_radar_v62_deluxe';
+const STORAGE_KEY = 'skw_radar_v62_secure';
 let allData = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
 let currentId = "", userPos = null, heading = 0, foundIds = new Set(), selectedEmoji = 0;
 
@@ -164,13 +166,9 @@ function initSensors() {
     }
     navigator.geolocation.watchPosition(p => {
         userPos = { lat: p.coords.latitude, lng: p.coords.longitude };
-        const acc = p.coords.accuracy;
-        document.getElementById('accuracyDisp').innerText = `精準度: ±${acc.toFixed(1)}M`;
+        document.getElementById('accuracyDisp').innerText = `精準度: ±${p.coords.accuracy.toFixed(1)}M`;
         const lAcc = document.getElementById('leaderAccDisp');
-        if(lAcc) {
-            lAcc.innerText = `ACC: ±${acc.toFixed(1)}M`;
-            lAcc.style.color = acc < 8 ? '#39ff14' : (acc < 15 ? '#ffcc00' : '#ff3e3e');
-        }
+        if(lAcc) lAcc.innerText = `ACC: ±${p.coords.accuracy.toFixed(1)}M`;
         checkArrival(); updateRadar();
     }, null, { enableHighAccuracy: true });
 }
@@ -185,34 +183,25 @@ function startMission() {
     initSensors(); renderLeaderTable();
 }
 
-function applyZoom(val) {
-    document.getElementById('zoomInput').value = val;
-    updateRadar();
-}
+function applyZoom(val) { document.getElementById('zoomInput').value = val; updateRadar(); }
 
-// --- 雷達渲染 ---
 function updateRadar() {
     if(!userPos) return;
     const base = parseFloat(document.getElementById('baseRangeInput').value) || 50000;
     const zoom = parseFloat(document.getElementById('zoomInput').value) || 1;
     const range = base / zoom;
-    
     document.getElementById('distDisp').innerText = `視距: ${Math.round(range)}M`;
     document.getElementById('rotateLayer').style.transform = `rotate(${-heading}deg)`;
     document.getElementById('northMark').style.transform = `translateX(-50%) rotate(${heading}deg)`;
-
     const container = document.getElementById('itemsContainer');
     container.innerHTML = '';
     const items = allData[currentId] || [];
-
     items.forEach(it => {
         const dLat = it.lat - userPos.lat;
         const dLng = it.lng - userPos.lng;
         const y = 50 - (dLat * 111320 / range) * 50;
         const x = 50 + (dLng * (111320 * Math.cos(userPos.lat * Math.PI / 180)) / range) * 50;
-
         if (x < -20 || x > 120 || y < -20 || y > 120) return;
-
         const el = document.createElement('div');
         el.className = 'item-dot';
         el.style.left = `${x}%`; el.style.top = `${y}%`;
@@ -220,23 +209,17 @@ function updateRadar() {
         if (foundIds.has(it.id)) el.style.opacity = "0.2";
         container.appendChild(el);
     });
-    
     const fCount = Array.from(foundIds).filter(id=>items.find(it=>it.id===id)).length;
     document.getElementById('progDisp').innerText = `${String(fCount).padStart(2,'0')}/${String(items.length).padStart(2,'0')}`;
 }
 
-// --- 抵達判定 ---
 function checkArrival() {
     if (!document.getElementById('leaderPanel').classList.contains('hidden')) return;
     const items = allData[currentId] || [];
     items.forEach(it => {
         if (foundIds.has(it.id)) return;
         const d = getD(userPos.lat, userPos.lng, it.lat, it.lng);
-        if (d < 8) { 
-            showFound(it);
-            foundIds.add(it.id);
-            if(navigator.vibrate) navigator.vibrate([200, 100, 200]);
-        }
+        if (d < 8) { showFound(it); foundIds.add(it.id); if(navigator.vibrate) navigator.vibrate(200); }
     });
 }
 
@@ -246,7 +229,6 @@ function getD(la1,lo1,la2,lo2){
     return R*2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-// --- 領袖功能 ---
 function openLeader() { document.getElementById('leaderPanel').classList.remove('hidden'); }
 function closeLeader() { document.getElementById('leaderPanel').classList.add('hidden'); }
 function verifyLeader() {
@@ -255,7 +237,7 @@ function verifyLeader() {
         document.getElementById('authBox').classList.add('hidden');
         document.getElementById('dropBox').classList.remove('hidden');
         initEmojiGrid(); renderLeaderTable();
-    } else { alert("密碼錯誤！"); }
+    } else alert("密碼錯誤");
 }
 
 function parseCoords(input) {
@@ -278,15 +260,13 @@ function dropItem() {
     const manual = parseCoords(document.getElementById('manualCoord').value);
     if(manual) { targetLat = manual.lat; targetLng = manual.lng; }
     else if(userPos) { targetLat = userPos.lat; targetLng = userPos.lng; }
-    else { alert("無法取得目前座標，請輸入手動座標"); return; }
-
+    else return;
     if(!allData[currentId]) allData[currentId] = [];
     const val = document.getElementById('customText').value;
     const newItem = { id: Date.now(), lat: targetLat, lng: targetLng, type: val?'text':'emoji', content: val||selectedEmoji };
     allData[currentId].push(newItem);
     allData[currentId + "_RANGE"] = document.getElementById('baseRangeInput').value;
-    save(); renderLeaderTable(); alert("投放成功！點位已加入。");
-    document.getElementById('manualCoord').value = "";
+    save(); renderLeaderTable(); updateRadar();
 }
 
 function renderLeaderTable() {
@@ -294,7 +274,7 @@ function renderLeaderTable() {
     const items = allData[currentId] || [];
     body.innerHTML = items.map(it => `<tr>
         <td><input type="checkbox" class="point-check w-5 h-5" value="${it.id}" onchange="updateCharCount()"></td>
-        <td class="font-bold text-green-700">${it.id.toString().slice(-4)}</td>
+        <td class="font-bold">${it.id.toString().slice(-4)}</td>
         <td class="truncate max-w-[120px]">${it.type==='emoji'?EMOJIS[it.content]:it.content}</td>
     </tr>`).join('');
     updateCharCount();
@@ -302,11 +282,8 @@ function renderLeaderTable() {
 
 function updateCharCount() {
     const selected = getSelectedItems();
-    const str = JSON.stringify(selected);
-    const count = str.length;
-    const el = document.getElementById('charCount');
-    el.innerText = `${count} 字元`;
-    el.style.color = count > 2000 ? '#ff3e3e' : (count > 1000 ? '#ffcc00' : '#39ff14');
+    const count = JSON.stringify(selected).length;
+    document.getElementById('charCount').innerText = `${count} 字元`;
 }
 
 function getSelectedItems() {
@@ -317,18 +294,15 @@ function getSelectedItems() {
 
 function generateQR() {
     const selected = getSelectedItems();
-    if(selected.length === 0) return alert("請先從表格中勾選點位！");
+    if(selected.length === 0) return alert("請先勾選點位");
     document.getElementById('qrModal').classList.remove('hidden');
     document.getElementById('qrcode').innerHTML = "";
-    new QRCode(document.getElementById("qrcode"), {
-        text: JSON.stringify(selected),
-        width: 256, height: 256
-    });
+    new QRCode(document.getElementById("qrcode"), { text: JSON.stringify(selected), width: 256, height: 256 });
 }
 
 function exportJSON() {
     const str = JSON.stringify(allData[currentId] || []);
-    navigator.clipboard.writeText(str).then(() => alert("完整 JSON 已複製！"));
+    navigator.clipboard.writeText(str).then(() => alert("JSON 已複製"));
 }
 
 function processImport() {
@@ -338,19 +312,16 @@ function processImport() {
         const newItems = Array.isArray(imported) ? imported : (imported[currentId] || []);
         const existing = allData[currentId] || [];
         const combined = [...existing, ...newItems];
-        // 核心：根據 ID 去重，實現追加而不覆蓋
         allData[currentId] = Array.from(new Map(combined.map(it => [it.id, it])).values());
-        save();
-        alert(`同步成功！目前該頻道累積 ${allData[currentId].length} 個點位。`);
-        location.reload();
-    } catch(e) { alert("數據格式錯誤！請檢查 JSON 內容。"); }
+        save(); location.reload();
+    } catch(e) { alert("格式錯誤"); }
 }
 
 function openImport() { document.getElementById('importModal').classList.remove('hidden'); }
 function showFound(it) {
     const box = document.getElementById('foundContent');
     if(it.type === 'emoji') box.innerText = EMOJIS[it.content];
-    else if(it.content.startsWith('http')) box.innerHTML = `<img src="${it.content}" class="max-h-[50vh] rounded-3xl shadow-2xl border-4 border-white">`;
+    else if(it.content.startsWith('http')) box.innerHTML = `<img src="${it.content}" class="max-h-[50vh] rounded-3xl shadow-2xl">`;
     else box.innerHTML = `<div class="text-white text-3xl font-bold px-6 text-center">${it.content}</div>`;
     document.getElementById('foundModal').classList.remove('hidden');
 }
@@ -358,7 +329,7 @@ function closeFound() { document.getElementById('foundModal').classList.add('hid
 function initEmojiGrid() {
     document.getElementById('emojiGrid').innerHTML = EMOJIS.map((e,i)=>`<button onclick="selectedEmoji=${i};initEmojiGrid()" class="p-3 text-2xl rounded-2xl border-2 ${selectedEmoji===i?'bg-green-600 border-white':'border-stone-800 bg-stone-900'}">${e}</button>`).join('');
 }
-function purgeChannel() { if(confirm("確定要完全清空此頻道的點位嗎？此操作不可逆！")) { allData[currentId] = []; save(); renderLeaderTable(); updateRadar(); } }
+function purgeChannel() { if(confirm("清空？")) { allData[currentId] = []; save(); renderLeaderTable(); updateRadar(); } }
 function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(allData)); }
 </script>
 </body>
