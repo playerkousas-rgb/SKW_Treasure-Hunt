@@ -2,44 +2,34 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>SKW Radar v6.2.1 - UX Enhanced</title>
+<title>SKW Radar v6.3.0 - UX Enhanced</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
     :root{ --radar-bg:#051a0b; --radar-grid:#154a28; --radar-glow:#39ff14; }
-    body,html{ 
-        margin:0; padding:0; width:100%; height:100%; overflow:hidden; 
-        background:#000; font-family:monospace; color:var(--radar-glow);
-        -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
-    }
-    .radar-container{ width:100vw; height:100vh; background:var(--radar-bg); position:relative; overflow:hidden; }
-    .grid-bg { position:absolute; inset:-200%; background-image: 
-        linear-gradient(var(--radar-grid) 1px, transparent 1px),
-        linear-gradient(90deg, var(--radar-grid) 1px, transparent 1px);
-        background-size: 60px 60px; background-position: center; }
-    .north-mark { position:absolute; top:15px; left:50%; transform:translateX(-50%); color:red; font-weight:900; font-size:24px; text-shadow:0 0 10px red; z-index:10; }
-    .item-dot{ width:18px; height:18px; background:#ff3e3e; border-radius:50%; box-shadow:0 0 15px #ff0000; border:2px solid #fff; position:absolute; transform:translate(-50%,-50%); }
-    .user-marker{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); z-index:30; width:22px; height:22px; background:#0088ff; border-radius:50%; border:2px solid #fff; box-shadow:0 0 20px #0088ff; }
-    .modal{ position:fixed; inset:0; z-index:1000; background:rgba(0,10,5,0.98); display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; }
-    .hidden{ display:none !important; }
-    .leader-table { width:100%; border-collapse: collapse; color: white; font-size: 11px; }
-    .leader-table th, .leader-table td { padding: 8px; border: 1px solid #333; text-align: center; }
-    .zoom-btn { background: rgba(255,255,255,0.1); border: 1px solid #333; padding: 8px; border-radius: 8px; font-size: 10px; flex: 1; color: white; }
+    body,html{margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#000; font-family:monospace; color:var(--radar-glow); -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;}
+    .radar-container{width:100vw; height:100vh; background:var(--radar-bg); position:relative; overflow:hidden;}
+    .grid-bg{position:absolute; inset:-200%; background-image:linear-gradient(var(--radar-grid) 1px, transparent 1px),linear-gradient(90deg, var(--radar-grid) 1px, transparent 1px); background-size:60px 60px; background-position:center;}
+    .north-mark{position:absolute; top:15px; left:50%; transform:translateX(-50%); color:red; font-weight:900; font-size:24px; text-shadow:0 0 10px red; z-index:10;}
+    .item-dot{width:18px; height:18px; background:#ff3e3e; border-radius:50%; box-shadow:0 0 15px #ff0000; border:2px solid #fff; position:absolute; transform:translate(-50%,-50%);}
+    .user-marker{position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); z-index:30; width:22px; height:22px; background:#0088ff; border-radius:50%; border:2px solid #fff; box-shadow:0 0 20px #0088ff;}
+    .modal{position:fixed; inset:0; z-index:1000; background:rgba(0,10,5,0.98); display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px;}
+    .hidden{display:none !important;}
+    .leader-table{width:100%; border-collapse:collapse; color:white; font-size:11px;}
+    .leader-table th,.leader-table td{padding:8px; border:1px solid #333; text-align:center;}
+    .zoom-btn{background:rgba(255,255,255,0.1); border:1px solid #333; padding:8px; border-radius:8px; font-size:10px; flex:1; color:white;}
 </style>
 </head>
 <body oncontextmenu="return false" onselectstart="return false" ondragstart="return false">
-
 <div id="bootScreen" class="fixed inset-0 bg-black z-[100] flex flex-col items-center justify-center p-8 text-center">
     <h1 class="text-5xl font-black text-green-500 italic mb-2 tracking-tighter">SKW RADAR</h1>
-    <p class="text-[10px] tracking-[0.5em] text-green-900 mb-10">COPYRIGHT(C) 2026 SKWSCOUT</p>
-    
+    <p class="text-[10px] tracking-[0.5em] text-green-900 mb-10">v6.3.0 • 預設5米可調 • COPYRIGHT(C) 2026 SKWSCOUT</p>
     <div class="bg-green-900/10 border border-green-900/30 p-5 rounded-2xl mb-10 w-72 text-[10px] text-green-700 leading-relaxed text-left">
         <b class="text-green-500 block mb-1">【成員導入指引】</b>
         1. 掃描領袖 QR 或複製 JSON 代碼<br>
         2. 點擊下方「導入數據」並貼上文字<br>
         3. 確保 ID 與領袖相同，點位即會出現
     </div>
-
     <div class="space-y-4 w-72">
         <input id="missionIdInput" type="text" placeholder="輸入頻道 ID" class="w-full bg-transparent border-b-2 border-green-900 text-center text-2xl uppercase text-white pb-2 outline-none focus:border-green-400">
         <button onclick="startMission()" class="w-full bg-green-600 text-black py-5 rounded-2xl font-black text-xl shadow-lg active:scale-95 transition-all">進入雷達系統</button>
@@ -54,27 +44,27 @@
         <div id="itemsContainer" class="absolute inset-0"></div>
         <div class="user-marker"></div>
     </div>
-    
+   
     <div class="absolute inset-0 pointer-events-none p-6 flex flex-col justify-between">
         <div class="flex justify-between items-start pointer-events-auto">
             <div class="bg-black/70 backdrop-blur-md p-4 rounded-2xl border border-green-900/50 shadow-xl">
                 <div id="currentIdDisp" class="text-2xl font-black italic text-white leading-none">---</div>
                 <div id="accuracyDisp" class="text-[9px] text-green-500 mt-1 font-bold">定位搜尋中...</div>
+                <div id="nearestDisp" class="text-[9px] text-amber-400 font-bold mt-1">最近目標: --M</div>
             </div>
             <button onclick="openLeader()" class="w-14 h-14 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 text-2xl">🛠️</button>
         </div>
-
         <div class="pointer-events-auto space-y-3">
             <div class="flex gap-2">
-                <button onclick="applyZoom(1)" class="zoom-btn">1X (全景)</button>
+                <button onclick="applyZoom(1)" class="zoom-btn">1X</button>
                 <button onclick="applyZoom(10)" class="zoom-btn">10X</button>
                 <button onclick="applyZoom(100)" class="zoom-btn">100X</button>
                 <button onclick="applyZoom(500)" class="zoom-btn">500X</button>
             </div>
             <div class="bg-black/80 backdrop-blur-xl p-5 rounded-3xl border border-green-900/50 flex justify-between items-center shadow-2xl">
                 <div class="flex flex-col">
-                    <span class="text-[9px] text-stone-500 font-bold mb-1 uppercase">Zoom Ratio</span>
-                    <input id="zoomInput" type="number" value="1" onchange="updateRadar()" class="bg-transparent text-3xl font-black text-green-400 w-24 outline-none">
+                    <span class="text-[9px] text-stone-500 font-bold mb-1 uppercase">自訂縮放比</span>
+                    <input id="zoomInput" type="number" value="1" step="0.1" onchange="updateRadar()" class="bg-transparent text-3xl font-black text-green-400 w-24 outline-none">
                 </div>
                 <div class="text-right">
                     <div id="progDisp" class="text-4xl font-black text-white leading-none">00/00</div>
@@ -94,25 +84,37 @@
             <button onclick="verifyLeader()" class="flex-1 bg-green-600 text-black font-black py-4 rounded-2xl">LOGIN</button>
         </div>
     </div>
-    
+   
     <div id="dropBox" class="hidden space-y-6">
         <div class="flex justify-between items-end border-b border-stone-800 pb-4">
             <h3 class="text-2xl font-black italic">投放工具箱</h3>
             <div id="leaderAccDisp" class="text-xs font-bold text-red-500">ACC: ±--M</div>
         </div>
+
+        <!-- 新增：領袖專用觸發距離調整 -->
+        <div class="bg-stone-900 p-5 rounded-3xl">
+            <label class="text-[10px] text-stone-500 block mb-1 font-bold">觸發距離（公尺）－ 成員靠近此距離即發現</label>
+            <div class="flex gap-3">
+                <input id="triggerDistInput" type="number" value="5" min="1" max="30" class="flex-1 bg-black/50 p-4 rounded-xl text-white font-bold border border-stone-800 outline-none text-center text-3xl">
+                <button onclick="setTriggerDistance()" class="bg-green-600 text-black px-8 rounded-2xl font-black">確認調整</button>
+            </div>
+            <p class="text-[10px] text-stone-500 mt-2">預設 5 米 • 越小越精準</p>
+        </div>
+
         <div class="bg-stone-900 p-5 rounded-3xl space-y-4">
             <div>
                 <label class="text-[10px] text-stone-500 block mb-1 font-bold">全景掃描範圍(半徑) (公尺/m)</label>
                 <input id="baseRangeInput" type="number" value="50000" class="w-full bg-black/50 p-4 rounded-xl text-white font-bold border border-stone-800 outline-none">
             </div>
             <div>
-                <label class="text-[10px] text-stone-500 block mb-1 font-bold">手動座標(經緯度) (範例: 22.281745137875195, 114.22716419003237 或 22°16'54.2"N 114°13'37.8"E)</label>
-                <input id="manualCoord" type="text" placeholder="在此輸入座標或留空以抓取目前位置" class="w-full bg-black/50 p-4 rounded-xl text-white text-xs border border-stone-800 outline-none">
+                <label class="text-[10px] text-stone-500 block mb-1 font-bold">手動座標(經緯度)</label>
+                <input id="manualCoord" type="text" placeholder="22.281745137875195, 114.22716419003237" class="w-full bg-black/50 p-4 rounded-xl text-white text-xs border border-stone-800 outline-none">
             </div>
             <div id="emojiGrid" class="grid grid-cols-5 gap-2"></div>
-            <input id="customText" type="text" placeholder="輸入顯示文字或圖片網址(必須是直接指向圖片,Google Drive 可能有阻擋不一定能成功" class="w-full bg-black/50 p-4 rounded-xl text-white text-sm border border-stone-800 outline-none">
+            <input id="customText" type="text" placeholder="輸入顯示文字或圖片網址" class="w-full bg-black/50 p-4 rounded-xl text-white text-sm border border-stone-800 outline-none">
             <button onclick="dropItem()" class="w-full bg-white text-black font-black py-5 rounded-2xl shadow-xl active:scale-95">在目標位置投下站點</button>
         </div>
+
         <div class="bg-stone-900 rounded-3xl overflow-hidden border border-stone-800">
             <div class="p-4 bg-stone-800 flex justify-between items-center text-white text-xs font-bold">
                 <span>分段勾選 (追加模式)</span>
@@ -129,6 +131,7 @@
     </div>
 </div>
 
+<!-- 其餘 modal 不變 -->
 <div id="foundModal" class="modal hidden">
     <div id="foundContent" class="text-6xl mb-12 flex items-center justify-center"></div>
     <button onclick="closeFound()" class="bg-green-600 text-black px-20 py-5 rounded-full font-black text-2xl shadow-2xl">收妥數據並返回</button>
@@ -150,13 +153,15 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
-// --- [安全防禦與核心] ---
-document.onkeydown = (e) => { if([123, 73, 74, 67, 85].includes(e.keyCode) && (e.ctrlKey || e.shiftKey)) return false; };
-const EMOJIS = ["🔴","⭐","💎","🔥","⚡","🍀","🌀","🛡️","🔑","🛸","🐲","🧿","🎁","🚩","🧭"];
-const STORAGE_KEY = 'skw_v621_final';
+// --- 核心變數 ---
+const STORAGE_KEY = 'skw_v630_final';
 let allData = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
 let currentId = "", userPos = null, heading = 0, foundIds = new Set(), selectedEmoji = 0;
+let triggerDistance = 5;   // ← 預設 5 米
 
+const EMOJIS = ["🔴","⭐","💎","🔥","⚡","🍀","🌀","🛡️","🔑","🛸","🐲","🧿","🎁","🚩","🧭"];
+
+// 感測器初始化
 function initSensors() {
     if (window.DeviceOrientationEvent) window.addEventListener('deviceorientationabsolute', e => { if(e.alpha !== null) heading = e.alpha; updateRadar(); }, true);
     navigator.geolocation.watchPosition(p => {
@@ -174,42 +179,66 @@ function startMission() {
     document.getElementById('currentIdDisp').innerText = currentId;
     document.getElementById('bootScreen').classList.add('hidden');
     document.getElementById('radarMain').classList.remove('hidden');
+
+    // 載入該頻道的觸發距離（預設5米）
+    triggerDistance = allData[currentId + "_TRIGGER"] || 5;
     if(allData[currentId + "_RANGE"]) document.getElementById('baseRangeInput').value = allData[currentId + "_RANGE"];
+
     initSensors(); renderLeaderTable();
 }
 
 function applyZoom(val) { document.getElementById('zoomInput').value = val; updateRadar(); }
 
+// 更新雷達 + 顯示最近目標距離
 function updateRadar() {
     if(!userPos) return;
     const base = parseFloat(document.getElementById('baseRangeInput').value) || 50000;
     const zoom = parseFloat(document.getElementById('zoomInput').value) || 1;
     const range = base / zoom;
     document.getElementById('distDisp').innerText = `視距: ${Math.round(range)}M`;
+
     document.getElementById('rotateLayer').style.transform = `rotate(${-heading}deg)`;
     document.getElementById('northMark').style.transform = `translateX(-50%) rotate(${heading}deg)`;
+
     const container = document.getElementById('itemsContainer');
     container.innerHTML = '';
     const items = allData[currentId] || [];
+
+    let minDist = Infinity;
     items.forEach(it => {
+        const d = getD(userPos.lat, userPos.lng, it.lat, it.lng);
+        if (d < minDist) minDist = d;
+
         const dLat = it.lat - userPos.lat, dLng = it.lng - userPos.lng;
         const y = 50 - (dLat * 111320 / range) * 50;
         const x = 50 + (dLng * (111320 * Math.cos(userPos.lat * Math.PI / 180)) / range) * 50;
         if (x < -20 || x > 120 || y < -20 || y > 120) return;
+
         const el = document.createElement('div');
-        el.className = 'item-dot'; el.style.left = `${x}%`; el.style.top = `${y}%`;
+        el.className = 'item-dot';
+        el.style.left = `${x}%`; el.style.top = `${y}%`;
         el.style.transform = `translate(-50%, -50%) rotate(${heading}deg)`;
         if (foundIds.has(it.id)) el.style.opacity = "0.2";
         container.appendChild(el);
     });
+
+    // 顯示最近目標距離
+    const nearestEl = document.getElementById('nearestDisp');
+    if (items.length > 0 && minDist < Infinity) {
+        nearestEl.innerText = `最近目標: ${Math.round(minDist)}M`;
+    } else {
+        nearestEl.innerText = `最近目標: --M`;
+    }
+
     const fCount = Array.from(foundIds).filter(id=>items.find(it=>it.id===id)).length;
     document.getElementById('progDisp').innerText = `${String(fCount).padStart(2,'0')}/${String(items.length).padStart(2,'0')}`;
 }
 
+// 觸發檢查（改用可調的 triggerDistance）
 function checkArrival() {
-    if (!document.getElementById('leaderPanel').classList.contains('hidden')) return;
+    if (document.getElementById('leaderPanel').classList.contains('hidden') === false) return;
     (allData[currentId] || []).forEach(it => {
-        if (!foundIds.has(it.id) && getD(userPos.lat, userPos.lng, it.lat, it.lng) < 8) {
+        if (!foundIds.has(it.id) && getD(userPos.lat, userPos.lng, it.lat, it.lng) < triggerDistance) {
             showFound(it); foundIds.add(it.id); if(navigator.vibrate) navigator.vibrate(200);
         }
     });
@@ -221,17 +250,31 @@ function getD(la1,lo1,la2,lo2){
     return R*2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
+// 領袖面板
 function openLeader() { document.getElementById('leaderPanel').classList.remove('hidden'); }
 function closeLeader() { document.getElementById('leaderPanel').classList.add('hidden'); }
+
 function verifyLeader() {
     const pass = document.getElementById('leaderPass').value;
     if(['0728', '1201'].includes(pass)) {
         document.getElementById('authBox').classList.add('hidden');
         document.getElementById('dropBox').classList.remove('hidden');
+        document.getElementById('triggerDistInput').value = triggerDistance;
         initEmojiGrid(); renderLeaderTable();
     } else alert("密碼錯誤");
 }
 
+// 領袖調整觸發距離
+function setTriggerDistance() {
+    const val = parseFloat(document.getElementById('triggerDistInput').value);
+    if (isNaN(val) || val < 1 || val > 30) return alert("請輸入 1～30 之間的數字");
+    triggerDistance = val;
+    allData[currentId + "_TRIGGER"] = val;
+    save();
+    alert(`✅ 觸發距離已調整為 ${val} 米`);
+}
+
+// 其餘原有功能（dropItem、renderLeaderTable、generateQR...）保持不變
 function parseCoords(input) {
     const dmsRegex = /(\d+)°(\d+)'([\d.]+)"([NSEW])/g;
     let parts = [...input.matchAll(dmsRegex)];
@@ -301,7 +344,7 @@ function openImport() { document.getElementById('importModal').classList.remove(
 function showFound(it) {
     const box = document.getElementById('foundContent');
     if(it.type === 'emoji') box.innerText = EMOJIS[it.content];
-    else if(it.content.startsWith('http')) box.innerHTML = `<img src="${it.content}" class="max-h-[50vh] rounded-3xl border-4 border-white shadow-2xl">`;
+    else if(it.content && it.content.startsWith('http')) box.innerHTML = `<img src="${it.content}" class="max-h-[50vh] rounded-3xl border-4 border-white shadow-2xl">`;
     else box.innerHTML = `<div class="text-white text-3xl font-bold px-6 text-center">${it.content}</div>`;
     document.getElementById('foundModal').classList.remove('hidden');
 }
